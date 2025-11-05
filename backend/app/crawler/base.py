@@ -403,101 +403,123 @@ class MangaCrawler:
             return None
     
     def get_manga_images(self, manga_url: str) -> List[Dict]:
-        """获取漫画的所有图片URL，按显示顺序"""
+        """获取漫画的所有图片URL，按显示顺序
+        
+        流程：
+        1. 遍历漫画详情页的所有分页，收集所有图片查看链接 (photos-view-id-xxxxx.html)
+        2. 逐个访问这些链接，从每个页面提取原图 URL
+        3. 不使用"下拉阅读"，因为它是懒加载，大漫画会导致部分图片未加载
+        """
         if not self.driver:
             return []
         
         try:
-            # 导航到漫画详情页
-            self.driver.get(manga_url)
-            time.sleep(2)
+            print(f"\n开始获取漫画图片: {manga_url}")
             
-            # 点击"下拉閱讀"或直接访问列表页
-            try:
-                list_link = self.driver.find_element(By.XPATH, "//a[contains(text(), '下拉閱讀')]")
-                list_url = list_link.get_attribute('href')
-            except:
-                # 如果没有找到，尝试构建列表页URL
-                if '/photos-index' in manga_url:
-                    list_url = manga_url.replace('/photos-index', '/photos-index') + '-list.html'
+            # 第一步：收集所有图片查看链接
+            view_urls = []
+            page_num = 1
+            
+            while True:
+                # 构建当前分页 URL
+                if page_num == 1:
+                    page_url = manga_url
                 else:
-                    list_url = manga_url + '-list.html'
+                    # 格式：photos-index-page-2-aid-208661.html
+                    if '-page-' in manga_url:
+                        # 如果已经有 page 参数，替换它
+                        page_url = re.sub(r'-page-\d+', f'-page-{page_num}', manga_url)
+                    else:
+                        # 在 aid 之前插入 page 参数
+                        page_url = re.sub(r'(-aid-)', rf'-page-{page_num}\1', manga_url)
+                
+                print(f"  扫描第 {page_num} 页: {page_url}")
+                self.driver.get(page_url)
+                time.sleep(2)
+                
+                # 查找所有图片查看链接 (photos-view-id-xxxxx.html)
+                view_links = self.driver.find_elements(By.CSS_SELECTOR, "a[href*='photos-view-id-']")
+                
+                if not view_links:
+                    if page_num == 1:
+                        print(f"    ✗ 第 1 页没有找到图片链接")
+                    else:
+                        print(f"    第 {page_num} 页没有更多图片，停止扫描")
+                    break
+                
+                # 提取所有链接 URL
+                page_view_urls = []
+                for link in view_links:
+                    url = link.get_attribute('href')
+                    if url and 'photos-view-id-' in url and url not in view_urls:
+                        page_view_urls.append(url)
+                
+                view_urls.extend(page_view_urls)
+                print(f"    找到 {len(page_view_urls)} 个图片链接（总计: {len(view_urls)}）")
+                
+                # 检查是否有下一页
+                next_page_links = self.driver.find_elements(By.CSS_SELECTOR, f"a[href*='-page-{page_num + 1}-']")
+                if not next_page_links:
+                    print(f"    没有第 {page_num + 1} 页，扫描完成")
+                    break
+                
+                page_num += 1
+                
+                # 安全限制：最多 100 页
+                if page_num > 100:
+                    print(f"    达到最大页数限制 (100 页)")
+                    break
             
-            self.driver.get(list_url)
-            time.sleep(3)
+            print(f"\n共收集到 {len(view_urls)} 个图片链接")
             
+            if not view_urls:
+                print("✗ 没有找到任何图片链接")
+                return []
+            
+            # 第二步：逐个访问链接获取原图
             images = []
             
-            # 获取所有图片链接（按页面上的顺序）
-            # 图片链接通常在详情页的缩略图列表中
-            img_links = self.driver.find_elements(By.CSS_SELECTOR, "a[href*='photos-view'], a[href*='photo']")
-            
-            # 如果没有找到，尝试从详情页获取
-            if not img_links:
-                self.driver.get(manga_url)
-                time.sleep(2)
-                img_links = self.driver.find_elements(By.CSS_SELECTOR, "a[href*='photos-view'], a[href*='photo']")
-            
-            for idx, link in enumerate(img_links, 1):
+            for idx, view_url in enumerate(view_urls, 1):
                 try:
-                    img_url = link.get_attribute('href')
-                    if not img_url or 'photos-view' not in img_url:
-                        # 尝试从图片元素获取
-                        img_elem = link.find_element(By.CSS_SELECTOR, "img")
-                        img_src = img_elem.get_attribute('src')
-                        if img_src and 'photo' in img_src:
-                            # 直接使用缩略图URL，可能需要替换为原图URL
-                            # 这里需要根据实际网站结构调整
-                            images.append({
-                                'index': idx,
-                                'url': img_src.replace('/thumb/', '/') if '/thumb/' in img_src else img_src,
-                                'filename': f"{idx:04d}.jpg"
-                            })
-                        continue
-                    
-                    # 打开图片页面获取原图
-                    self.driver.get(img_url)
-                    time.sleep(1)
+                    print(f"  [{idx}/{len(view_urls)}] 获取原图...")
+                    self.driver.get(view_url)
+                    time.sleep(1.5)
                     
                     # 查找原图
-                    # 原图特征：src 包含 wnimg，且路径格式为 /data/.../xxx.jpg (不含 /t/)
-                    try:
-                        img_elems = self.driver.find_elements(By.CSS_SELECTOR, "img[src*='wnimg']")
-                        original_url = None
-                        
-                        for img_elem in img_elems:
-                            src = img_elem.get_attribute('src')
-                            # 过滤掉缩略图 (包含 /t/) 和其他非原图
-                            if src and '/data/' in src and '/t/' not in src:
-                                original_url = src
-                                break
-                        
-                        if original_url:
-                            # 获取文件扩展名
-                            ext = original_url.split('.')[-1].split('?')[0] if '.' in original_url else 'jpg'
-                            images.append({
-                                'index': idx,
-                                'url': original_url,
-                                'filename': f"{idx:04d}.{ext}"
-                            })
-                            print(f"      [{idx}] 原图: {original_url[:60]}...")
-                        else:
-                            print(f"      [{idx}] ✗ 未找到原图")
-                    except Exception as inner_e:
-                        # 如果找不到，记录错误
-                        print(f"      [{idx}] ✗ 查找原图失败: {inner_e}")
+                    # 原图特征：src 包含 wnimg，且路径为 /data/.../xxx.jpg (不含 /t/)
+                    img_elems = self.driver.find_elements(By.CSS_SELECTOR, "img[src*='wnimg']")
+                    original_url = None
                     
-                    # 返回列表页
-                    if idx < len(img_links):
-                        self.driver.back()
-                        time.sleep(0.5)
+                    for img_elem in img_elems:
+                        src = img_elem.get_attribute('src')
+                        # 过滤掉缩略图 (包含 /t/) 和其他非原图
+                        if src and '/data/' in src and '/t/' not in src:
+                            original_url = src
+                            break
+                    
+                    if original_url:
+                        # 获取文件扩展名
+                        ext = original_url.split('.')[-1].split('?')[0] if '.' in original_url else 'jpg'
+                        images.append({
+                            'index': idx,
+                            'url': original_url,
+                            'filename': f"{idx:04d}.{ext}"
+                        })
+                        print(f"    ✓ {original_url[:70]}...")
+                    else:
+                        print(f"    ✗ 未找到原图")
+                        
                 except Exception as e:
-                    print(f"获取图片 {idx} 失败: {e}")
+                    print(f"    ✗ 获取失败: {e}")
                     continue
             
+            print(f"\n✓ 成功获取 {len(images)}/{len(view_urls)} 张原图")
             return images
+            
         except Exception as e:
             print(f"获取漫画图片失败: {e}")
+            import traceback
+            traceback.print_exc()
             return []
     
     def close(self):
