@@ -197,16 +197,20 @@ class MangaCrawler:
                     page_num = 1
                     author_manga_count = 0
                     
+                    # 从第一页开始
+                    current_url = category_url
+                    visited_urls = set()
+                    
                     # 遍历所有分页
                     while True:
-                        # 构建当前页面URL
-                        if page_num == 1:
-                            page_url = f"{base}/users-users_fav-c-{category_id}.html"
-                        else:
-                            page_url = f"{base}/users-users_fav-page-{page_num}-c-{category_id}.html"
+                        # 避免重复访问
+                        if current_url in visited_urls:
+                            print(f"  检测到重复URL，停止翻页")
+                            break
                         
-                        print(f"  访问第 {page_num} 页: {page_url}")
-                        self.driver.get(page_url)
+                        print(f"  访问第 {page_num} 页: {current_url}")
+                        self.driver.get(current_url)
+                        visited_urls.add(current_url)
                         time.sleep(2)
                         
                         # 查找该页面下的所有漫画链接
@@ -251,27 +255,43 @@ class MangaCrawler:
                         
                         print(f"    第 {page_num} 页：找到 {page_manga_count} 个漫画")
                         
-                        # 检查是否有下一页
-                        has_next_page = False
-                        try:
-                            # 方法1: 通过查找下一页的链接来判断
-                            next_page_num = page_num + 1
-                            next_page_links = self.driver.find_elements(By.CSS_SELECTOR, f"a[href*='page-{next_page_num}']")
-                            if next_page_links:
-                                has_next_page = True
-                                print(f"    检测到第 {next_page_num} 页链接，继续翻页")
-                            else:
-                                print(f"    未检测到第 {next_page_num} 页链接")
-                        except Exception as e:
-                            print(f"    检测下一页时出错: {e}")
-                        
-                        # 如果没有找到漫画，或者没有下一页，停止翻页
+                        # 如果没有找到漫画，停止翻页
                         if page_manga_count == 0:
                             print(f"    第 {page_num} 页没有找到漫画，停止翻页")
                             break
                         
-                        if not has_next_page:
-                            print(f"    没有更多页面，停止翻页")
+                        # 查找"下一页"或"后頁"链接
+                        next_page_link = None
+                        try:
+                            # 方法1：通过文本查找（后頁>、下一頁等）
+                            next_links = self.driver.find_elements(By.XPATH, "//a[contains(text(), '後頁') or contains(text(), '后页') or contains(text(), '下一頁') or contains(text(), '下一页')]")
+                            if next_links:
+                                next_page_link = next_links[0]
+                                print(f"    找到下一页链接（文本匹配）")
+                        except Exception as e:
+                            print(f"    方法1查找下一页失败: {e}")
+                        
+                        if not next_page_link:
+                            try:
+                                # 方法2：查找包含 users-users_fav 和 category_id 且未访问的链接
+                                all_page_links = self.driver.find_elements(By.CSS_SELECTOR, f"a[href*='users-users_fav'][href*='c-{category_id}']")
+                                for link in all_page_links:
+                                    href = link.get_attribute('href')
+                                    if href and href not in visited_urls and '-page-' in href:
+                                        next_page_link = link
+                                        print(f"    找到下一页链接（URL模式匹配）")
+                                        break
+                            except Exception as e:
+                                print(f"    方法2查找下一页失败: {e}")
+                        
+                        if not next_page_link:
+                            print(f"    没有找到下一页链接，停止翻页")
+                            break
+                        
+                        # 获取下一页 URL
+                        current_url = next_page_link.get_attribute('href')
+                        if not current_url:
+                            print(f"    下一页链接无效，停止翻页")
                             break
                         
                         page_num += 1
@@ -420,21 +440,19 @@ class MangaCrawler:
             view_urls = []
             page_num = 1
             
+            # 从第一页开始
+            current_url = manga_url
+            visited_urls = set()
+            
             while True:
-                # 构建当前分页 URL
-                if page_num == 1:
-                    page_url = manga_url
-                else:
-                    # 格式：photos-index-page-2-aid-208661.html
-                    if '-page-' in manga_url:
-                        # 如果已经有 page 参数，替换它
-                        page_url = re.sub(r'-page-\d+', f'-page-{page_num}', manga_url)
-                    else:
-                        # 在 aid 之前插入 page 参数
-                        page_url = re.sub(r'(-aid-)', rf'-page-{page_num}\1', manga_url)
+                # 避免重复访问
+                if current_url in visited_urls:
+                    print(f"  检测到重复URL，停止扫描")
+                    break
                 
-                print(f"  扫描第 {page_num} 页: {page_url}")
-                self.driver.get(page_url)
+                print(f"  扫描第 {page_num} 页: {current_url}")
+                self.driver.get(current_url)
+                visited_urls.add(current_url)
                 time.sleep(2)
                 
                 # 查找所有图片查看链接 (photos-view-id-xxxxx.html)
@@ -457,10 +475,36 @@ class MangaCrawler:
                 view_urls.extend(page_view_urls)
                 print(f"    找到 {len(page_view_urls)} 个图片链接（总计: {len(view_urls)}）")
                 
-                # 检查是否有下一页
-                next_page_links = self.driver.find_elements(By.CSS_SELECTOR, f"a[href*='-page-{page_num + 1}-']")
-                if not next_page_links:
-                    print(f"    没有第 {page_num + 1} 页，扫描完成")
+                # 查找"下一页"或"后頁"链接
+                next_page_link = None
+                try:
+                    # 方法1：通过文本查找（后頁>、下一頁等）
+                    next_links = self.driver.find_elements(By.XPATH, "//a[contains(text(), '後頁') or contains(text(), '后页') or contains(text(), '下一頁') or contains(text(), '下一页')]")
+                    if next_links:
+                        next_page_link = next_links[0]
+                except:
+                    pass
+                
+                if not next_page_link:
+                    try:
+                        # 方法2：查找包含 photos-index 且 page 数字更大的链接
+                        all_page_links = self.driver.find_elements(By.CSS_SELECTOR, "a[href*='photos-index']")
+                        for link in all_page_links:
+                            href = link.get_attribute('href')
+                            if href and href not in visited_urls and '-page-' in href:
+                                next_page_link = link
+                                break
+                    except:
+                        pass
+                
+                if not next_page_link:
+                    print(f"    没有找到下一页链接，扫描完成")
+                    break
+                
+                # 获取下一页 URL
+                current_url = next_page_link.get_attribute('href')
+                if not current_url:
+                    print(f"    下一页链接无效，停止扫描")
                     break
                 
                 page_num += 1
