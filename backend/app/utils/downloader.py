@@ -2,10 +2,17 @@ import os
 import requests
 import zipfile
 from pathlib import Path
-from typing import List, Dict
-from PIL import Image
-from io import BytesIO
+from typing import List, Dict, Optional
 from app.config import settings
+
+# 可选的PIL导入
+try:
+    from PIL import Image
+    from io import BytesIO
+    PIL_AVAILABLE = True
+except ImportError:
+    PIL_AVAILABLE = False
+    print("警告: Pillow未安装，某些图片处理功能将不可用")
 
 
 class MangaDownloader:

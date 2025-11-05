@@ -5,8 +5,16 @@ from datetime import datetime
 from pydantic import BaseModel
 import os
 import time
-from selenium.webdriver.common.by import By
+import uuid
 from app.database import get_db
+
+# 可选的Selenium导入
+try:
+    from selenium.webdriver.common.by import By
+    SELENIUM_AVAILABLE = True
+except ImportError:
+    SELENIUM_AVAILABLE = False
+    print("警告: Selenium未安装，爬虫功能将不可用")
 from app.models import Manga
 from app.schemas import (
     MangaResponse, SyncResponse, DownloadResponse, 
@@ -23,12 +31,15 @@ router = APIRouter(prefix="/api", tags=["manga"])
 def get_mangas(db: Session = Depends(get_db)):
     """获取所有漫画"""
     mangas = db.query(Manga).all()
-    return mangas
+    return [MangaResponse.from_orm(manga) for manga in mangas]
 
 
 @router.post("/sync", response_model=SyncResponse)
 def sync_collection(background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     """同步收藏夹"""
+    if not SELENIUM_AVAILABLE:
+        raise HTTPException(status_code=503, detail="Selenium未安装，无法使用爬虫功能")
+    
     crawler = MangaCrawler()
     
     try:
@@ -211,27 +222,45 @@ def get_recent_updates(db: Session = Depends(get_db)):
             for item in manga_items:
                 try:
                     manga_url = item.get_attribute('href')
+                    if not manga_url:
+                        continue
+                    
+                    # 检查是否已在收藏夹中
+                    existing = db.query(Manga).filter(
+                        Manga.manga_url == manga_url
+                    ).first()
+                    
+                    if existing:
+                        continue  # 已在收藏夹中，跳过
+                    
                     details = crawler.get_manga_details(manga_url)
                     
                     if details:
                         latest_date = author_latest_dates.get(author)
                         if latest_date and details.get('updated_at'):
                             if details['updated_at'] > latest_date:
-                                # 检查是否已在收藏夹中
-                                existing = db.query(Manga).filter(
-                                    Manga.manga_url == manga_url
-                                ).first()
-                                
-                                if not existing:
-                                    recent_updates.append(details)
-                except:
+                                # 创建临时Manga对象用于返回
+                                temp_manga = Manga(
+                                    id=str(uuid.uuid4()),
+                                    title=details['title'],
+                                    author=author,
+                                    manga_url=manga_url,
+                                    page_count=details.get('page_count'),
+                                    updated_at=details.get('updated_at'),
+                                    cover_image_url=details.get('cover_image_url'),
+                                    is_downloaded=False
+                                )
+                                recent_updates.append(temp_manga)
+                except Exception as e:
+                    print(f"处理搜索结果项失败: {e}")
                     continue
     except Exception as e:
         print(f"获取最近更新失败: {e}")
     finally:
         crawler.close()
     
-    return recent_updates
+    # 转换为响应格式
+    return [MangaResponse.from_orm(manga) for manga in recent_updates]
 
 
 class AddToCollectionRequest(BaseModel):

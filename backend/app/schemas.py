@@ -29,12 +29,50 @@ class MangaUpdate(BaseModel):
 class MangaResponse(MangaBase):
     id: str
     file_size: Optional[int] = None
-    is_downloaded: bool
+    is_downloaded: bool = False
     downloaded_at: Optional[datetime] = None
     cover_image_path: Optional[str] = None
+    preview_image_url: Optional[str] = None  # 前端期望的字段名
     
     class Config:
         from_attributes = True
+    
+    @classmethod
+    def from_orm(cls, obj):
+        """自定义ORM转换，确保字段映射正确"""
+        # 兼容Pydantic v2和v1
+        try:
+            # 尝试使用Pydantic v2的model_validate
+            return cls.model_validate({
+                'id': obj.id,
+                'title': obj.title,
+                'author': obj.author,
+                'manga_url': obj.manga_url,
+                'file_size': obj.file_size,
+                'page_count': obj.page_count,
+                'updated_at': obj.updated_at,
+                'is_downloaded': obj.is_downloaded or False,
+                'downloaded_at': obj.downloaded_at,
+                'cover_image_url': obj.cover_image_url,
+                'cover_image_path': obj.cover_image_path,
+                'preview_image_url': obj.cover_image_url,  # 使用cover_image_url作为预览图
+            })
+        except AttributeError:
+            # 回退到直接构造
+            return cls(
+                id=obj.id,
+                title=obj.title,
+                author=obj.author,
+                manga_url=obj.manga_url,
+                file_size=obj.file_size,
+                page_count=obj.page_count,
+                updated_at=obj.updated_at,
+                is_downloaded=obj.is_downloaded or False,
+                downloaded_at=obj.downloaded_at,
+                cover_image_url=obj.cover_image_url,
+                cover_image_path=obj.cover_image_path,
+                preview_image_url=obj.cover_image_url,
+            )
 
 
 class SyncResponse(BaseModel):

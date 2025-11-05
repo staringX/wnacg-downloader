@@ -64,3 +64,30 @@ coverage/
 # yarn.lock
 # pnpm-lock.yaml
 
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+env/
+ENV/
+*.db
+*.sqlite
+*.sqlite3
+
+# 下载和生成的文件
+downloads/
+covers/
+*.cbz
+*.zip
+
+# 日志文件
+*.log
+/tmp/
+
