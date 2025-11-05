@@ -145,7 +145,9 @@ class MangaCrawler:
             return []
         
         try:
-            mangas = []
+            # 重要：必须严格按照页面显示顺序收集漫画，不能对列表进行任何排序！
+            mangas = []  # 保持页面顺序的漫画列表
+            manga_urls_set = set()  # 用于快速去重
             base = self.base_url.rstrip('/')
             
             # 正确的书架URL（通过Chrome DevTools MCP确认）
@@ -217,17 +219,18 @@ class MangaCrawler:
                         manga_links = self.driver.find_elements(By.CSS_SELECTOR, "a[href*='photos-index-aid-']")
                         page_manga_count = 0
                         
+                        # 按照页面顺序处理漫画链接
                         for manga_link in manga_links:
                             try:
                                 manga_url = manga_link.get_attribute('href')
                                 title = manga_link.text.strip()
                                 
-                                # 跳过空标题或重复链接
+                                # 跳过空标题或空链接
                                 if not title or not manga_url:
                                     continue
                                 
-                                # 检查是否已添加（避免重复）
-                                if any(m['manga_url'] == manga_url for m in mangas):
+                                # 快速去重：使用 set 检查是否已添加
+                                if manga_url in manga_urls_set:
                                     continue
                                 
                                 # 尝试获取页数信息
@@ -241,12 +244,14 @@ class MangaCrawler:
                                 except:
                                     pass
                                 
+                                # 按照页面顺序添加到列表
                                 mangas.append({
                                     'title': title,
                                     'author': author,
                                     'manga_url': manga_url,
                                     'page_count': page_count
                                 })
+                                manga_urls_set.add(manga_url)  # 添加到 set 用于去重
                                 page_manga_count += 1
                                 author_manga_count += 1
                             except Exception as e:
@@ -437,25 +442,28 @@ class MangaCrawler:
             print(f"\n开始获取漫画图片: {manga_url}")
             
             # 第一步：收集所有图片查看链接
-            view_urls = []
+            # 重要：必须严格按照页面显示顺序收集，不能对链接进行任何排序！
+            view_urls = []  # 保持页面顺序的链接列表
+            view_urls_set = set()  # 用于快速去重
             page_num = 1
             
             # 从第一页开始
             current_url = manga_url
-            visited_urls = set()
+            visited_page_urls = set()
             
             while True:
-                # 避免重复访问
-                if current_url in visited_urls:
+                # 避免重复访问同一分页
+                if current_url in visited_page_urls:
                     print(f"  检测到重复URL，停止扫描")
                     break
                 
                 print(f"  扫描第 {page_num} 页: {current_url}")
                 self.driver.get(current_url)
-                visited_urls.add(current_url)
+                visited_page_urls.add(current_url)
                 time.sleep(2)
                 
                 # 查找所有图片查看链接 (photos-view-id-xxxxx.html)
+                # 注意：find_elements 返回的顺序就是页面上的显示顺序
                 view_links = self.driver.find_elements(By.CSS_SELECTOR, "a[href*='photos-view-id-']")
                 
                 if not view_links:
@@ -465,15 +473,17 @@ class MangaCrawler:
                         print(f"    第 {page_num} 页没有更多图片，停止扫描")
                     break
                 
-                # 提取所有链接 URL
-                page_view_urls = []
+                # 按照页面顺序提取链接，使用 set 快速去重
+                page_view_count = 0
                 for link in view_links:
                     url = link.get_attribute('href')
-                    if url and 'photos-view-id-' in url and url not in view_urls:
-                        page_view_urls.append(url)
+                    # 去重：只添加未见过的链接，但保持顺序
+                    if url and 'photos-view-id-' in url and url not in view_urls_set:
+                        view_urls.append(url)
+                        view_urls_set.add(url)
+                        page_view_count += 1
                 
-                view_urls.extend(page_view_urls)
-                print(f"    找到 {len(page_view_urls)} 个图片链接（总计: {len(view_urls)}）")
+                print(f"    找到 {page_view_count} 个图片链接（总计: {len(view_urls)}）")
                 
                 # 查找"下一页"或"后頁"链接
                 next_page_link = None
@@ -487,11 +497,11 @@ class MangaCrawler:
                 
                 if not next_page_link:
                     try:
-                        # 方法2：查找包含 photos-index 且 page 数字更大的链接
+                        # 方法2：查找包含 photos-index 且未访问的分页链接
                         all_page_links = self.driver.find_elements(By.CSS_SELECTOR, "a[href*='photos-index']")
                         for link in all_page_links:
                             href = link.get_attribute('href')
-                            if href and href not in visited_urls and '-page-' in href:
+                            if href and href not in visited_page_urls and '-page-' in href:
                                 next_page_link = link
                                 break
                     except:
