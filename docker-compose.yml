@@ -1,0 +1,55 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: manga_user
+      POSTGRES_PASSWORD: manga_password
+      POSTGRES_DB: manga_db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U manga_user"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build: ./backend
+    environment:
+      DATABASE_URL: postgresql://manga_user:manga_password@db:5432/manga_db
+      MANGA_USERNAME: ${MANGA_USERNAME:-lilifan456}
+      MANGA_PASSWORD: ${MANGA_PASSWORD:-a2658208}
+      PUBLISH_PAGE_URL: ${PUBLISH_PAGE_URL:-https://wn01.link}
+      DOWNLOAD_DIR: /app/downloads
+      COVER_DIR: /app/covers
+      API_HOST: 0.0.0.0
+      API_PORT: 8000
+      CORS_ORIGINS: '["http://localhost:3000"]'
+    volumes:
+      - ./backend/downloads:/app/downloads
+      - ./backend/covers:/app/covers
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      NEXT_PUBLIC_API_URL: http://backend:8000
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
