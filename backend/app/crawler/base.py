@@ -93,9 +93,10 @@ class MangaCrawler:
         
         try:
             # 导航到登录页面
-            login_url = f"{self.base_url}/users-login.html"
+            base = self.base_url.rstrip('/')
+            login_url = f"{base}/users-login.html"
             self.driver.get(login_url)
-            time.sleep(2)
+            time.sleep(3)
             
             # 查找并填写登录表单
             username_input = WebDriverWait(self.driver, 10).until(
@@ -117,13 +118,22 @@ class MangaCrawler:
             
             # 检查是否登录成功（查找用户名或退出登录链接）
             current_url = self.driver.current_url
-            if "users-login" not in current_url:
+            print(f"登录后跳转到: {current_url}")
+            
+            # 等待页面加载完成
+            time.sleep(2)
+            
+            # 检查页面是否包含登录成功的标志
+            page_source = self.driver.page_source
+            if "users-login" not in current_url or "我的空間" in page_source or "lilifan456" in page_source:
                 # 获取cookies并设置到session
                 cookies = self.driver.get_cookies()
                 for cookie in cookies:
                     self.session.cookies.set(cookie['name'], cookie['value'])
+                print("登录成功，已保存cookies")
                 return True
             
+            print("登录可能失败，仍在登录页面")
             return False
         except Exception as e:
             print(f"登录失败: {e}")
@@ -135,58 +145,196 @@ class MangaCrawler:
             return []
         
         try:
-            # 导航到我的书架页面
-            bookshelf_url = f"{self.base_url}/users-bookshelf.html"
-            self.driver.get(bookshelf_url)
-            time.sleep(3)
-            
             mangas = []
+            base = self.base_url.rstrip('/')
             
-            # 获取所有作者分类链接
-            category_links = self.driver.find_elements(By.CSS_SELECTOR, "a[href*='bookshelf']")
+            # 正确的书架URL（通过Chrome DevTools MCP确认）
+            bookshelf_url = f"{base}/users-users_fav.html"
+            print(f"访问书架页面: {bookshelf_url}")
+            self.driver.get(bookshelf_url)
+            time.sleep(5)
             
-            for link in category_links:
-                category_text = link.text.strip()
-                if category_text and category_text != "全部" and category_text != "管理分類":
-                    # 点击分类链接
-                    link.click()
-                    time.sleep(2)
+            # 检查页面是否成功加载
+            current_url = self.driver.current_url
+            page_title = self.driver.title
+            print(f"当前页面URL: {current_url}")
+            print(f"页面标题: {page_title}")
+            
+            if "404" in page_title.lower() or "404" in self.driver.page_source[:1000].lower():
+                print(f"书架页面返回404")
+                return []
+            
+            # 查找分类链接（格式：users-users_fav-c-{id}.html）
+            category_links = {}  # {author_name: link_url}
+            all_links = self.driver.find_elements(By.CSS_SELECTOR, "a")
+            
+            for link in all_links:
+                href = link.get_attribute('href') or ''
+                text = link.text.strip()
+                
+                # 识别分类链接：users-users_fav-c-{id}.html
+                if 'users-users_fav-c-' in href and text:
+                    # 排除"全部"和"管理分類"
+                    if text not in ["全部", "管理分類", "書架", "书架", "我的書架"]:
+                        category_links[text] = href
+                        print(f"找到分类: {text} -> {href}")
+            
+            print(f"共找到 {len(category_links)} 个作者分类")
+            
+            # 如果有分类，按分类获取漫画
+            if category_links:
+                for author, category_url in category_links.items():
+                    print(f"\n处理作者分类: {author}")
                     
-                    # 解析当前分类下的漫画
-                    manga_items = self.driver.find_elements(By.CSS_SELECTOR, "a[href*='photos-index']")
+                    # 提取分类ID（从URL中）
+                    # 格式：users-users_fav-c-{category_id}.html
+                    category_id_match = re.search(r'users-users_fav-c-(\d+)\.html', category_url)
+                    if not category_id_match:
+                        print(f"  无法提取分类ID，跳过")
+                        continue
                     
-                    for item in manga_items:
-                        try:
-                            title = item.text.strip()
-                            manga_url = item.get_attribute('href')
-                            
-                            if title and manga_url:
-                                # 获取页数信息
-                                parent = item.find_element(By.XPATH, "./..")
-                                page_info = parent.find_elements(By.XPATH, ".//*[contains(text(), '頁數')]")
-                                page_count = None
+                    category_id = category_id_match.group(1)
+                    page_num = 1
+                    author_manga_count = 0
+                    
+                    # 遍历所有分页
+                    while True:
+                        # 构建当前页面URL
+                        if page_num == 1:
+                            page_url = f"{base}/users-users_fav-c-{category_id}.html"
+                        else:
+                            page_url = f"{base}/users-users_fav-page-{page_num}-c-{category_id}.html"
+                        
+                        print(f"  访问第 {page_num} 页: {page_url}")
+                        self.driver.get(page_url)
+                        time.sleep(2)
+                        
+                        # 查找该页面下的所有漫画链接
+                        manga_links = self.driver.find_elements(By.CSS_SELECTOR, "a[href*='photos-index-aid-']")
+                        page_manga_count = 0
+                        
+                        for manga_link in manga_links:
+                            try:
+                                manga_url = manga_link.get_attribute('href')
+                                title = manga_link.text.strip()
                                 
-                                if page_info:
-                                    page_text = page_info[0].text
+                                # 跳过空标题或重复链接
+                                if not title or not manga_url:
+                                    continue
+                                
+                                # 检查是否已添加（避免重复）
+                                if any(m['manga_url'] == manga_url for m in mangas):
+                                    continue
+                                
+                                # 尝试获取页数信息
+                                page_count = None
+                                try:
+                                    parent = manga_link.find_element(By.XPATH, "./ancestor::*[contains(text(), '頁數')]")
+                                    page_text = parent.text
                                     page_match = re.search(r'頁數[：:]\s*(\d+)', page_text)
                                     if page_match:
                                         page_count = int(page_match.group(1))
+                                except:
+                                    pass
                                 
                                 mangas.append({
                                     'title': title,
-                                    'author': category_text,
+                                    'author': author,
                                     'manga_url': manga_url,
                                     'page_count': page_count
                                 })
+                                page_manga_count += 1
+                                author_manga_count += 1
+                            except Exception as e:
+                                print(f"    处理漫画失败: {e}")
+                                continue
+                        
+                        print(f"    第 {page_num} 页：找到 {page_manga_count} 个漫画")
+                        
+                        # 检查是否有下一页
+                        has_next_page = False
+                        try:
+                            # 方法1: 通过查找下一页的链接来判断
+                            next_page_num = page_num + 1
+                            next_page_links = self.driver.find_elements(By.CSS_SELECTOR, f"a[href*='page-{next_page_num}']")
+                            if next_page_links:
+                                has_next_page = True
+                                print(f"    检测到第 {next_page_num} 页链接，继续翻页")
+                            else:
+                                print(f"    未检测到第 {next_page_num} 页链接")
                         except Exception as e:
-                            print(f"解析漫画项失败: {e}")
-                            continue
+                            print(f"    检测下一页时出错: {e}")
+                        
+                        # 如果没有找到漫画，或者没有下一页，停止翻页
+                        if page_manga_count == 0:
+                            print(f"    第 {page_num} 页没有找到漫画，停止翻页")
+                            break
+                        
+                        if not has_next_page:
+                            print(f"    没有更多页面，停止翻页")
+                            break
+                        
+                        page_num += 1
+                        
+                        # 安全检查：最多翻100页
+                        if page_num > 100:
+                            print(f"    已达到最大页数限制(100页)，停止翻页")
+                            break
+                    
+                    print(f"  {author} 总共获取 {author_manga_count} 个漫画")
+            else:
+                # 如果没有找到分类链接，直接从当前页面获取所有漫画
+                print("未找到分类链接，从当前页面直接获取漫画...")
+                manga_links = self.driver.find_elements(By.CSS_SELECTOR, "a[href*='photos-index-aid-']")
+                print(f"找到 {len(manga_links)} 个漫画链接")
+                
+                for manga_link in manga_links:
+                    try:
+                        manga_url = manga_link.get_attribute('href')
+                        title = manga_link.text.strip()
+                        
+                        if title and manga_url:
+                            # 尝试从页面中提取作者信息
+                            author = "未知"
+                            try:
+                                # 查找分类名称（通常在链接附近）
+                                parent = manga_link.find_element(By.XPATH, "./ancestor::*[position()<=5]")
+                                author_elem = parent.find_elements(By.XPATH, ".//*[contains(@href, 'users-users_fav-c-')]")
+                                if author_elem:
+                                    author = author_elem[0].text.strip() or "未知"
+                            except:
+                                pass
+                            
+                            # 获取页数
+                            page_count = None
+                            try:
+                                parent = manga_link.find_element(By.XPATH, "./ancestor::*[contains(text(), '頁數')]")
+                                page_text = parent.text
+                                page_match = re.search(r'頁數[：:]\s*(\d+)', page_text)
+                                if page_match:
+                                    page_count = int(page_match.group(1))
+                            except:
+                                pass
+                            
+                            mangas.append({
+                                'title': title,
+                                'author': author,
+                                'manga_url': manga_url,
+                                'page_count': page_count
+                            })
+                    except Exception as e:
+                        print(f"处理漫画失败: {e}")
+                        continue
             
+            print(f"\n总共获取到 {len(mangas)} 个漫画")
             return mangas
         except Exception as e:
             print(f"获取收藏夹失败: {e}")
+            import traceback
+            traceback.print_exc()
             return []
-    
+
+
     def get_manga_details(self, manga_url: str) -> Optional[Dict]:
         """获取漫画详情（页数、更新日期、封面等）"""
         if not self.driver:
@@ -194,45 +342,55 @@ class MangaCrawler:
         
         try:
             self.driver.get(manga_url)
-            time.sleep(2)
+            time.sleep(3)
             
             # 获取标题
-            title_elem = self.driver.find_element(By.CSS_SELECTOR, "h2")
-            title = title_elem.text.strip()
+            title = None
+            try:
+                title_elem = self.driver.find_element(By.CSS_SELECTOR, "h2")
+                title = title_elem.text.strip()
+            except:
+                pass
             
-            # 获取页数
-            page_info = self.driver.find_element(By.XPATH, "//*[contains(text(), '頁數')]")
-            page_text = page_info.text
-            page_match = re.search(r'頁數[：:]\s*(\d+)', page_text)
-            page_count = int(page_match.group(1)) if page_match else None
+            # 获取页数 - 格式："頁數：20P"
+            page_count = None
+            try:
+                page_elem = self.driver.find_element(By.XPATH, "//*[contains(text(), '頁數')]")
+                page_text = page_elem.text  # 例如: "頁數：20P"
+                # 提取数字部分
+                page_match = re.search(r'頁數[：:]\s*(\d+)', page_text)
+                if page_match:
+                    page_count = int(page_match.group(1))
+            except Exception as e:
+                print(f"    获取页数失败: {e}")
             
-            # 获取作者（从标签中提取）
-            author = None
-            tag_links = self.driver.find_elements(By.CSS_SELECTOR, "a[href*='tag']")
-            for tag in tag_links:
-                tag_text = tag.text.strip()
-                # 通常第一个标签是作者
-                if tag_text and not tag_text.startswith('['):
-                    author = tag_text
-                    break
-            
-            # 获取封面图片URL
-            cover_img = self.driver.find_element(By.CSS_SELECTOR, "img[alt*='']")
-            cover_url = cover_img.get_attribute('src')
-            
-            # 获取更新日期（从图片上传时间中提取）
-            upload_info = self.driver.find_elements(By.XPATH, "//*[contains(text(), '上傳於')]")
+            # 获取上传日期 - 从图片列表中的"上傳於2023-06-22"提取
             updated_at = None
-            if upload_info:
-                upload_text = upload_info[0].text
-                date_match = re.search(r'上傳於(\d{4}-\d{2}-\d{2})', upload_text)
-                if date_match:
-                    date_str = date_match.group(1)
-                    updated_at = datetime.strptime(date_str, '%Y-%m-%d')
+            try:
+                # 查找所有包含"上傳於"的元素
+                upload_elems = self.driver.find_elements(By.XPATH, "//*[contains(text(), '上傳於')]")
+                if upload_elems:
+                    # 取第一个图片的上传日期作为漫画更新日期
+                    upload_text = upload_elems[0].text  # 例如: "上傳於2023-06-22"
+                    date_match = re.search(r'上傳於(\d{4}-\d{2}-\d{2})', upload_text)
+                    if date_match:
+                        date_str = date_match.group(1)
+                        updated_at = datetime.strptime(date_str, '%Y-%m-%d')
+            except Exception as e:
+                print(f"    获取上传日期失败: {e}")
+            
+            # 获取封面图片URL - 取第一张图片的缩略图
+            cover_url = None
+            try:
+                # 查找所有图片，通常第一张是封面
+                images = self.driver.find_elements(By.CSS_SELECTOR, "img[src*='wnimg']")
+                if images:
+                    cover_url = images[0].get_attribute('src')
+            except Exception as e:
+                print(f"    获取封面失败: {e}")
             
             return {
                 'title': title,
-                'author': author,
                 'manga_url': manga_url,
                 'page_count': page_count,
                 'updated_at': updated_at,
@@ -240,6 +398,8 @@ class MangaCrawler:
             }
         except Exception as e:
             print(f"获取漫画详情失败: {e}")
+            import traceback
+            traceback.print_exc()
             return None
     
     def get_manga_images(self, manga_url: str) -> List[Dict]:
@@ -300,9 +460,17 @@ class MangaCrawler:
                     time.sleep(1)
                     
                     # 查找原图
+                    # 原图特征：src 包含 wnimg，且路径格式为 /data/.../xxx.jpg (不含 /t/)
                     try:
-                        img_elem = self.driver.find_element(By.CSS_SELECTOR, "img[src*='photo'], img[src*='image']")
-                        original_url = img_elem.get_attribute('src')
+                        img_elems = self.driver.find_elements(By.CSS_SELECTOR, "img[src*='wnimg']")
+                        original_url = None
+                        
+                        for img_elem in img_elems:
+                            src = img_elem.get_attribute('src')
+                            # 过滤掉缩略图 (包含 /t/) 和其他非原图
+                            if src and '/data/' in src and '/t/' not in src:
+                                original_url = src
+                                break
                         
                         if original_url:
                             # 获取文件扩展名
@@ -312,14 +480,12 @@ class MangaCrawler:
                                 'url': original_url,
                                 'filename': f"{idx:04d}.{ext}"
                             })
-                    except:
-                        # 如果找不到，尝试使用URL中的图片
-                        if 'photo' in img_url:
-                            images.append({
-                                'index': idx,
-                                'url': img_url,
-                                'filename': f"{idx:04d}.jpg"
-                            })
+                            print(f"      [{idx}] 原图: {original_url[:60]}...")
+                        else:
+                            print(f"      [{idx}] ✗ 未找到原图")
+                    except Exception as inner_e:
+                        # 如果找不到，记录错误
+                        print(f"      [{idx}] ✗ 查找原图失败: {inner_e}")
                     
                     # 返回列表页
                     if idx < len(img_links):

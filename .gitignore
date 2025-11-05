@@ -91,3 +91,5 @@ covers/
 *.log
 /tmp/
 
+*.backup_*
+*_get_collection_new.py

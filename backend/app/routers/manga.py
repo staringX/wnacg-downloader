@@ -50,20 +50,26 @@ def sync_collection(background_tasks: BackgroundTasks, db: Session = Depends(get
         # 获取收藏夹
         collection = crawler.get_collection()
         
+        print(f"同步完成，获取到 {len(collection)} 个收藏")
+        if len(collection) == 0:
+            print("警告：收藏夹为空，可能是无法访问书架页面或账号没有收藏")
+        
         added_count = 0
         updated_count = 0
+        new_mangas = []  # 存储新增的漫画，用于后续获取详细信息
         
+        # 第一步：识别新增和已存在的漫画
         for item in collection:
             # 检查是否已存在
             existing = db.query(Manga).filter(Manga.manga_url == item['manga_url']).first()
             
             if existing:
-                # 更新信息
-                if item.get('page_count'):
+                # 已存在，仅更新基本信息（如果需要）
+                if item.get('page_count') and not existing.page_count:
                     existing.page_count = item['page_count']
                 updated_count += 1
             else:
-                # 创建新记录
+                # 新漫画，先创建基本记录
                 manga = Manga(
                     title=item['title'],
                     author=item['author'],
@@ -71,9 +77,42 @@ def sync_collection(background_tasks: BackgroundTasks, db: Session = Depends(get
                     page_count=item.get('page_count')
                 )
                 db.add(manga)
+                new_mangas.append(manga)
                 added_count += 1
         
+        # 提交基本信息
         db.commit()
+        
+        # 第二步：对新增的漫画获取详细信息（页数、更新日期、封面）
+        if new_mangas:
+            print(f"\n开始获取 {len(new_mangas)} 个新漫画的详细信息...")
+            success_count = 0
+            
+            for idx, manga in enumerate(new_mangas, 1):
+                try:
+                    print(f"  [{idx}/{len(new_mangas)}] 获取: {manga.title[:50]}...")
+                    details = crawler.get_manga_details(manga.manga_url)
+                    
+                    if details:
+                        # 更新详细信息
+                        if details.get('page_count'):
+                            manga.page_count = details['page_count']
+                        if details.get('updated_at'):
+                            manga.updated_at = details['updated_at']
+                        if details.get('cover_image_url'):
+                            manga.cover_image_url = details['cover_image_url']
+                        success_count += 1
+                        print(f"    ✓ 页数: {manga.page_count}, 更新: {manga.updated_at}")
+                    else:
+                        print(f"    ✗ 无法获取详细信息")
+                        
+                except Exception as e:
+                    print(f"    ✗ 获取失败: {e}")
+                    continue
+            
+            # 提交详细信息
+            db.commit()
+            print(f"\n详细信息获取完成: {success_count}/{len(new_mangas)} 成功")
         
         return SyncResponse(
             success=True,
