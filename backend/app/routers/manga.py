@@ -23,6 +23,7 @@ from app.schemas import (
 from app.crawler.base import MangaCrawler
 from app.utils.downloader import MangaDownloader
 from app.config import settings
+from app.utils.logger import logger
 
 router = APIRouter(prefix="/api", tags=["manga"])
 
@@ -42,9 +43,9 @@ def verify_local_files(db: Session):
     Returns:
         tuple: (verified_count, fixed_count, missing_files)
     """
-    print(f"\n{'='*60}")
-    print(f"开始验证本地文件完整性...")
-    print(f"{'='*60}\n")
+    logger.info("=" * 60)
+    logger.info("开始验证本地文件完整性...")
+    logger.info("=" * 60)
     
     from pathlib import Path
     
@@ -54,10 +55,10 @@ def verify_local_files(db: Session):
     ).all()
     
     if not downloaded_mangas:
-        print("没有已下载的漫画需要验证\n")
+        logger.info("没有已下载的漫画需要验证")
         return 0, 0, []
     
-    print(f"找到 {len(downloaded_mangas)} 个已下载的漫画记录")
+    logger.info(f"找到 {len(downloaded_mangas)} 个已下载的漫画记录")
     
     verified_count = 0
     fixed_count = 0
@@ -82,8 +83,7 @@ def verify_local_files(db: Session):
         
         # 如果CBZ文件不存在，重置下载状态
         if not cbz_exists:
-            print(f"  ❌ 文件丢失: {manga.title[:50]}")
-            print(f"     路径: {cbz_path}")
+            logger.warning(f"文件丢失: {manga.title[:50]} - 路径: {cbz_path}")
             
             # 重置下载状态
             manga.is_downloaded = False
@@ -101,16 +101,16 @@ def verify_local_files(db: Session):
             missing_files.append(manga.title)
         else:
             verified_count += 1
-            print(f"  ✅ 验证通过: {manga.title[:50]}")
+            logger.debug(f"验证通过: {manga.title[:50]}")
     
     # 提交所有更改
     if fixed_count > 0:
         db.commit()
-        print(f"\n已重置 {fixed_count} 个丢失文件的下载状态")
+        logger.warning(f"已重置 {fixed_count} 个丢失文件的下载状态")
     
-    print(f"\n{'='*60}")
-    print(f"验证完成: {verified_count} 个完整, {fixed_count} 个需要重新下载")
-    print(f"{'='*60}\n")
+    logger.info("=" * 60)
+    logger.info(f"验证完成: {verified_count} 个完整, {fixed_count} 个需要重新下载")
+    logger.info("=" * 60)
     
     return verified_count, fixed_count, missing_files
 
@@ -165,7 +165,7 @@ def sync_collection(background_tasks: BackgroundTasks, db: Session = Depends(get
     try:
         verified_count, fixed_count, missing_files = verify_local_files(db)
     except Exception as e:
-        print(f"⚠️  文件验证失败: {e}")
+        logger.warning(f"文件验证失败: {e}")
         # 验证失败不影响同步，继续执行
     
     crawler = MangaCrawler()
@@ -176,8 +176,10 @@ def sync_collection(background_tasks: BackgroundTasks, db: Session = Depends(get
             raise HTTPException(status_code=401, detail="登录失败")
         
         # 🚀 使用生成器：边爬取边保存，真正的实时同步！
-        print(f"开始实时同步（生成器模式）...")
-        print(f"提示：每爬取到一个漫画就会立即保存，刷新页面即可看到最新数据\n")
+        logger.info("=" * 60)
+        logger.info("开始实时同步（生成器模式）")
+        logger.info("提示：每爬取到一个漫画就会立即保存，刷新页面即可看到最新数据")
+        logger.info("=" * 60)
         
         added_count = 0
         updated_count = 0
@@ -197,10 +199,10 @@ def sync_collection(background_tasks: BackgroundTasks, db: Session = Depends(get
                         existing.page_count = item['page_count']
                         db.commit()
                     updated_count += 1
-                    print(f"  [{processed_count}] ⟳ 已存在: {item['title'][:50]}")
+                    logger.info(f"[{processed_count}] ⟳ 已存在: {item['title'][:50]}")
                 else:
                     # 新漫画，创建记录并立即保存
-                    print(f"  [{processed_count}] ✚ 新增: {item['title'][:50]}")
+                    logger.info(f"[{processed_count}] ✚ 新增: {item['title'][:50]}")
                     
                     manga = Manga(
                         title=item['title'],
@@ -227,20 +229,20 @@ def sync_collection(background_tasks: BackgroundTasks, db: Session = Depends(get
                             if details.get('cover_image_url'):
                                 manga.cover_image_url = details['cover_image_url']
                             db.commit()  # 🔥 再次提交详情！
-                            print(f"       ✓ 详情: 页数={manga.page_count}, 更新={str(manga.updated_at)[:10] if manga.updated_at else 'N/A'}")
+                            logger.debug(f"     ✓ 详情: 页数={manga.page_count}, 更新={str(manga.updated_at)[:10] if manga.updated_at else 'N/A'}")
                         else:
-                            print(f"       ⚠ 无法获取详细信息")
+                            logger.warning(f"     ⚠ 无法获取详细信息: {manga.title[:30]}")
                             
                     except Exception as detail_error:
-                        print(f"       ⚠ 获取详情失败: {detail_error}")
+                        logger.warning(f"     ⚠ 获取详情失败: {detail_error}")
                         # 详情获取失败不影响基本记录的保存，继续处理下一个
                     
             except Exception as e:
-                print(f"  [{processed_count}] ✗ 处理失败: {item.get('title', 'Unknown')[:50]} - {e}")
+                logger.error(f"[{processed_count}] ✗ 处理失败: {item.get('title', 'Unknown')[:50]} - {e}")
                 db.rollback()  # 回滚当前失败的事务
                 continue
         
-        print(f"\n同步完成：新增 {added_count} 个，更新 {updated_count} 个")
+        logger.info(f"同步完成：新增 {added_count} 个，更新 {updated_count} 个")
         
         return SyncResponse(
             success=True,

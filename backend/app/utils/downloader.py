@@ -4,6 +4,7 @@ import zipfile
 from pathlib import Path
 from typing import List, Dict, Optional
 from app.config import settings
+from app.utils.logger import logger
 
 # 可选的PIL导入
 try:

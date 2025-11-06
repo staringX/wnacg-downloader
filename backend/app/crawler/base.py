@@ -5,6 +5,7 @@ import time
 import re
 from datetime import datetime
 from app.config import settings
+from app.utils.logger import logger
 
 # 可选的Selenium导入
 try:

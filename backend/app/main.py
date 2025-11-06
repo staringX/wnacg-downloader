@@ -3,11 +3,18 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
 from app.routers import manga
 from app.database import Base, engine
+from app.utils.logger import logger
 
 # 创建数据库表
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="漫画下载管理器API", version="1.0.0")
+
+# 启动日志
+logger.info("=" * 60)
+logger.info("漫画下载管理器 API 启动")
+logger.info(f"数据库: {settings.database_url}")
+logger.info("=" * 60)
 
 # CORS配置
 app.add_middleware(
