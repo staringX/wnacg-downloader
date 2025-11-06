@@ -493,22 +493,27 @@ class MangaCrawler:
                             print(f"    第 {page_num} 页没有找到漫画，停止翻页")
                             break
                         
-                        # 查找下一页链接
+                        # 查找下一页链接（必须是收藏夹的翻页，不是漫画详情的翻页）
                         next_page_link = None
                         try:
-                            next_links = self.driver.find_elements(By.XPATH, "//a[contains(text(), '後頁') or contains(text(), '后页') or contains(text(), '下一頁') or contains(text(), '下一页')]")
+                            # 方法1：查找包含"後頁"且URL包含users-users_fav的链接
+                            next_links = self.driver.find_elements(By.XPATH, "//a[contains(@href, 'users-users_fav') and (contains(text(), '後頁') or contains(text(), '后页') or contains(text(), '下一頁') or contains(text(), '下一页'))]")
                             if next_links:
                                 next_page_link = next_links[0]
+                                print(f"    找到下一页链接（文本匹配）: {next_page_link.get_attribute('href')[:80]}")
                         except Exception as e:
                             pass
                         
                         if not next_page_link:
                             try:
+                                # 方法2：查找 users-users_fav 且包含当前 category_id 的分页链接
                                 all_page_links = self.driver.find_elements(By.CSS_SELECTOR, f"a[href*='users-users_fav'][href*='c-{category_id}']")
                                 for link in all_page_links:
                                     href = link.get_attribute('href')
-                                    if href and href not in visited_urls and '-page-' in href:
+                                    # 必须包含 users-users_fav 和 page，且未访问过
+                                    if href and href not in visited_urls and '-page-' in href and 'users-users_fav' in href:
                                         next_page_link = link
+                                        print(f"    找到下一页链接（URL匹配）: {href[:80]}")
                                         break
                             except Exception as e:
                                 pass
