@@ -1,0 +1,85 @@
+# 群晖NAS自动从GitHub拉取代码的docker-compose配置
+# 
+# 使用方式：
+#   1. 首次部署：先运行 init-from-github.sh 初始化项目
+#   2. 然后运行：docker-compose -f docker-compose.synology.auto.yml up -d
+#
+# 或者使用一键部署脚本（推荐）：
+#   ./deploy-synology.sh
+#
+# 注意：此配置假设代码已经通过脚本从GitHub拉取到本地
+
+services:
+
+  db:
+    image: postgres:15-alpine
+    container_name: wnacg-downloader-db
+    environment:
+      POSTGRES_USER: manga_user
+      POSTGRES_PASSWORD: manga_pass
+      POSTGRES_DB: manga_db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U manga_user -d manga_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - wnacg-network
+
+  backend:
+    build: 
+      context: /volume1/docker/wnacg-downloader/backend
+      dockerfile: Dockerfile
+    container_name: wnacg-downloader-backend
+    environment:
+      DATABASE_URL: postgresql://manga_user:manga_pass@db:5432/manga_db
+      MANGA_USERNAME: ${MANGA_USERNAME:-lilifan456}
+      MANGA_PASSWORD: ${MANGA_PASSWORD:-a2658208}
+      PUBLISH_PAGE_URL: ${PUBLISH_PAGE_URL:-https://wn01.link}
+      DOWNLOAD_DIR: /app/downloads
+      COVER_DIR: /app/covers
+      API_HOST: 0.0.0.0
+      API_PORT: 8000
+      CORS_ORIGINS: ${CORS_ORIGINS:-'["http://localhost:3000"]'}
+    volumes:
+      - /volume1/docker/wnacg-downloader/backend/downloads:/app/downloads
+      - /volume1/docker/wnacg-downloader/backend/covers:/app/covers
+      - /volume1/docker/wnacg-downloader/backend/logs:/app/logs
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - wnacg-network
+
+  frontend:
+    build:
+      context: /volume1/docker/wnacg-downloader/frontend
+      dockerfile: Dockerfile
+    container_name: wnacg-downloader-frontend
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+    environment:
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+    depends_on:
+      backend:
+        condition: service_started
+    restart: unless-stopped
+    networks:
+      - wnacg-network
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  wnacg-network:
+    driver: bridge
+
