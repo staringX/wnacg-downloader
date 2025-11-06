@@ -24,5 +24,9 @@ class Manga(Base):
     cover_image_path = Column(String, nullable=True)  # 封面图片本地路径
     cbz_file_path = Column(String, nullable=True)  # CBZ文件路径
     
+    # 断点续传支持
+    download_status = Column(String, default="not_started", index=True)  # not_started, downloading, completed, failed
+    downloaded_pages = Column(Integer, default=0)  # 已下载的页数
+    
     created_at = Column(DateTime, server_default=func.now())
     updated_at_db = Column(DateTime, server_default=func.now(), onupdate=func.now())

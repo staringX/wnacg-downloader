@@ -43,10 +43,19 @@ class MangaDownloader:
             print(f"下载图片失败 {url}: {e}")
             return False
     
-    def download_manga(self, manga_title: str, images: List[Dict]) -> tuple[Optional[str], Optional[str]]:
+    def download_manga_stream(self, manga_title: str, images: List[Dict], 
+                             resume: bool = True, progress_callback=None):
         """
-        下载漫画并打包为CBZ
-        返回: (cbz_file_path, cover_image_path)
+        下载漫画（生成器版本）- 支持断点续传和实时保存
+        
+        Args:
+            manga_title: 漫画标题
+            images: 图片列表 [{'url': ..., 'filename': ..., 'index': ...}]
+            resume: 是否断点续传（检查已下载的文件）
+            progress_callback: 进度回调函数 callback(downloaded_count, total_count, status_message)
+        
+        Yields:
+            dict: 进度信息 {'index', 'total', 'filename', 'status', 'message'}
         """
         # 清理标题，用于文件名
         safe_title = "".join(c for c in manga_title if c.isalnum() or c in (' ', '-', '_')).strip()
@@ -56,48 +65,138 @@ class MangaDownloader:
         temp_dir = self.download_dir / safe_title
         temp_dir.mkdir(parents=True, exist_ok=True)
         
+        downloaded_count = 0
+        cover_path = None
+        
         try:
-            # 下载所有图片
-            downloaded_files = []
-            cover_path = None
-            
+            # 边下载边保存，每张图片立即写入磁盘
             for img_info in images:
                 img_url = img_info['url']
                 filename = img_info['filename']
+                img_index = img_info.get('index', 0)
                 file_path = temp_dir / filename
                 
-                if self.download_image(img_url, file_path):
-                    downloaded_files.append(file_path)
+                # 🔥 断点续传：检查文件是否已存在
+                if resume and file_path.exists() and file_path.stat().st_size > 0:
+                    downloaded_count += 1
+                    print(f"  [{img_index}/{len(images)}] ⏭️  跳过（已存在）: {filename}")
+                    
+                    yield {
+                        'index': img_index,
+                        'total': len(images),
+                        'filename': filename,
+                        'status': 'skipped',
+                        'message': f'跳过已下载: {filename}'
+                    }
                     
                     # 第一张图片作为封面
                     if not cover_path:
-                        cover_path = self.cover_dir / f"{safe_title}_cover.{file_path.suffix}"
+                        cover_path = self.cover_dir / f"{safe_title}_cover{file_path.suffix}"
+                        cover_path.parent.mkdir(parents=True, exist_ok=True)
+                        import shutil
+                        if not cover_path.exists():
+                            shutil.copy2(file_path, cover_path)
+                    
+                    continue
+                
+                # 下载图片
+                print(f"  [{img_index}/{len(images)}] ⬇️  下载: {filename}")
+                
+                if self.download_image(img_url, file_path):
+                    downloaded_count += 1
+                    print(f"  [{img_index}/{len(images)}] ✅ 完成: {filename}")
+                    
+                    yield {
+                        'index': img_index,
+                        'total': len(images),
+                        'filename': filename,
+                        'status': 'success',
+                        'message': f'下载成功: {filename}',
+                        'downloaded_count': downloaded_count
+                    }
+                    
+                    # 第一张图片作为封面
+                    if not cover_path:
+                        cover_path = self.cover_dir / f"{safe_title}_cover{file_path.suffix}"
                         cover_path.parent.mkdir(parents=True, exist_ok=True)
                         import shutil
                         shutil.copy2(file_path, cover_path)
+                    
+                    # 调用进度回调
+                    if progress_callback:
+                        progress_callback(downloaded_count, len(images), f"已下载 {downloaded_count}/{len(images)}")
+                else:
+                    print(f"  [{img_index}/{len(images)}] ❌ 失败: {filename}")
+                    
+                    yield {
+                        'index': img_index,
+                        'total': len(images),
+                        'filename': filename,
+                        'status': 'failed',
+                        'message': f'下载失败: {filename}'
+                    }
+            
+            # 所有图片下载完成，打包CBZ
+            print(f"\n开始打包 CBZ 文件...")
+            cbz_path = self.download_dir / f"{safe_title}.cbz"
+            
+            # 获取所有已下载的文件（按文件名排序）
+            downloaded_files = sorted(temp_dir.glob("*"))
             
             if not downloaded_files:
-                return None, None
+                yield {
+                    'status': 'error',
+                    'message': '没有可打包的文件'
+                }
+                return
             
             # 创建CBZ文件
-            cbz_path = self.download_dir / f"{safe_title}.cbz"
             with zipfile.ZipFile(cbz_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
                 for file_path in downloaded_files:
-                    zipf.write(file_path, file_path.name)
+                    if file_path.is_file():
+                        zipf.write(file_path, file_path.name)
+            
+            print(f"✅ CBZ 文件已创建: {cbz_path}")
+            
+            # 获取文件大小
+            file_size = cbz_path.stat().st_size
+            
+            yield {
+                'status': 'completed',
+                'message': '打包完成',
+                'cbz_path': str(cbz_path),
+                'cover_path': str(cover_path) if cover_path else None,
+                'file_size': file_size,
+                'downloaded_count': downloaded_count
+            }
             
             # 清理临时目录
             import shutil
             shutil.rmtree(temp_dir)
-            
-            return str(cbz_path), str(cover_path) if cover_path else None
+            print(f"🧹 临时目录已清理")
             
         except Exception as e:
-            print(f"下载漫画失败: {e}")
-            # 清理临时目录
-            if temp_dir.exists():
-                import shutil
-                shutil.rmtree(temp_dir)
-            return None, None
+            print(f"❌ 下载漫画失败: {e}")
+            yield {
+                'status': 'error',
+                'message': f'下载失败: {str(e)}'
+            }
+    
+    def download_manga(self, manga_title: str, images: List[Dict]) -> tuple[Optional[str], Optional[str]]:
+        """
+        下载漫画并打包为CBZ（兼容旧版本）
+        返回: (cbz_file_path, cover_image_path)
+        """
+        cbz_path = None
+        cover_path = None
+        
+        # 使用生成器版本
+        for progress in self.download_manga_stream(manga_title, images, resume=False):
+            if progress.get('status') == 'completed':
+                cbz_path = progress.get('cbz_path')
+                cover_path = progress.get('cover_path')
+        
+        return cbz_path, cover_path
     
     def get_file_size(self, file_path: str) -> int:
         """获取文件大小（字节）"""
