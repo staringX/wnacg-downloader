@@ -85,7 +85,7 @@ def download_manga(manga_id: str, background_tasks: BackgroundTasks, db: Session
         cbz_path = None
         cover_path = None
         
-        for progress in downloader.download_manga_stream(manga.title, images, resume=True):
+        for progress in downloader.download_manga_stream(manga.title, images, author=manga.author, resume=True):
             status = progress.get('status')
             
             # 更新下载进度

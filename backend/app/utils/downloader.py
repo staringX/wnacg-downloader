@@ -45,13 +45,14 @@ class MangaDownloader:
             return False
     
     def download_manga_stream(self, manga_title: str, images: List[Dict], 
-                             resume: bool = True, progress_callback=None):
+                             author: str = "", resume: bool = True, progress_callback=None):
         """
         下载漫画（生成器版本）- 支持断点续传和实时保存
         
         Args:
             manga_title: 漫画标题
             images: 图片列表 [{'url': ..., 'filename': ..., 'index': ...}]
+            author: 作者名称（用于创建分类文件夹）
             resume: 是否断点续传（检查已下载的文件）
             progress_callback: 进度回调函数 callback(downloaded_count, total_count, status_message)
         
@@ -62,8 +63,13 @@ class MangaDownloader:
         safe_title = "".join(c for c in manga_title if c.isalnum() or c in (' ', '-', '_')).strip()
         safe_title = safe_title.replace(' ', '_')
         
-        # 创建临时目录
-        temp_dir = self.download_dir / safe_title
+        # 清理作者名，用于文件夹名（处理特殊字符）
+        safe_author = "".join(c for c in author if c.isalnum() or c in (' ', '-', '_', '（', '）', '(', ')')).strip()
+        safe_author = safe_author.replace(' ', '_') if safe_author else "未知作者"
+        
+        # 按作者分类创建目录结构：downloads/作者名/漫画标题/
+        author_dir = self.download_dir / safe_author
+        temp_dir = author_dir / safe_title
         temp_dir.mkdir(parents=True, exist_ok=True)
         
         downloaded_count = 0
@@ -139,7 +145,8 @@ class MangaDownloader:
             
             # 所有图片下载完成，打包CBZ
             print(f"\n开始打包 CBZ 文件...")
-            cbz_path = self.download_dir / f"{safe_title}.cbz"
+            # CBZ文件保存在作者文件夹下
+            cbz_path = author_dir / f"{safe_title}.cbz"
             
             # 获取所有已下载的文件（按文件名排序）
             downloaded_files = sorted(temp_dir.glob("*"))
@@ -183,7 +190,7 @@ class MangaDownloader:
                 'message': f'下载失败: {str(e)}'
             }
     
-    def download_manga(self, manga_title: str, images: List[Dict]) -> tuple[Optional[str], Optional[str]]:
+    def download_manga(self, manga_title: str, images: List[Dict], author: str = "") -> tuple[Optional[str], Optional[str]]:
         """
         下载漫画并打包为CBZ（兼容旧版本）
         返回: (cbz_file_path, cover_image_path)
@@ -192,7 +199,7 @@ class MangaDownloader:
         cover_path = None
         
         # 使用生成器版本
-        for progress in self.download_manga_stream(manga_title, images, resume=False):
+        for progress in self.download_manga_stream(manga_title, images, author=author, resume=False):
             if progress.get('status') == 'completed':
                 cbz_path = progress.get('cbz_path')
                 cover_path = progress.get('cover_path')
