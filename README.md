@@ -7,7 +7,7 @@
 - 📚 自动同步收藏夹（按作者分类）
 - ⬇️ 下载漫画并打包为CBZ格式
 - 🖼️ 自动保存封面图片
-- 📊 使用PostgreSQL存储漫画信息
+- 📊 使用SQLite存储漫画信息（轻量级，易备份）
 - 🔄 最近更新功能（显示收藏作者的更新）
 - ⭐ 收藏新漫画功能
 - 🐳 Docker一键部署
@@ -46,9 +46,8 @@ docker-compose up -d
 ```bash
 pip install -r requirements.txt
 ```
-3. 配置环境变量（复制`.env.example`为`.env`）
-4. 确保PostgreSQL正在运行
-5. 启动服务：
+3. 配置环境变量（可选，默认使用SQLite）
+4. 启动服务：
 ```bash
 uvicorn app.main:app --reload
 ```
@@ -74,11 +73,13 @@ npm run dev
 - `MANGA_USERNAME`: 漫画网站用户名
 - `MANGA_PASSWORD`: 漫画网站密码
 - `PUBLISH_PAGE_URL`: 发布页地址（默认：https://wn01.link）
-- `DATABASE_URL`: PostgreSQL连接字符串
+- `DATABASE_URL`: 数据库连接字符串（默认：sqlite:///./manga.db）
 
 ### 数据库
 
-系统会自动创建所需的表。首次运行前请确保PostgreSQL已启动。
+系统默认使用 SQLite 数据库，会自动创建所需的表和数据库文件。
+- Docker 部署：数据存储在 `sqlite_data` volume 中
+- 本地开发：数据库文件为 `backend/manga.db`
 
 ## API接口
 
@@ -104,7 +105,7 @@ npm run dev
 
 - **前端**: Next.js 16, React 19, TypeScript, Tailwind CSS
 - **后端**: Python 3.11, FastAPI, SQLAlchemy, Selenium
-- **数据库**: PostgreSQL 15
+- **数据库**: SQLite 3（内置，无需额外配置）
 - **容器化**: Docker, Docker Compose
 
 ## 许可证
