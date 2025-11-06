@@ -1,11 +1,14 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { MangaCard } from "./manga-card"
+import { AuthorSection } from "./author-section"
 import { Button } from "@/components/ui/button"
-import { Download, Sparkles, RefreshCw } from "lucide-react"
+import { Switch } from "@/components/ui/switch"
+import { Label } from "@/components/ui/label"
+import { Download, Sparkles, RefreshCw, Users } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
-import type { RecentUpdate } from "@/lib/types"
+import type { RecentUpdate, AuthorGroup, MangaItem } from "@/lib/types"
 import { api } from "@/lib/api"
 import { mockRecentUpdates } from "@/lib/mock-data"
 
@@ -20,6 +23,7 @@ interface RecentUpdatesProps {
 export function RecentUpdates({ onDownload, onDelete, downloadingIds, showPreview = false, refreshTrigger = 0 }: RecentUpdatesProps) {
   const [updates, setUpdates] = useState<RecentUpdate[]>([])
   const [isLoading, setIsLoading] = useState(false)
+  const [groupByAuthor, setGroupByAuthor] = useState(false)
   const { toast } = useToast()
 
   // 组件加载时或refreshTrigger变化时自动获取最近更新
@@ -92,11 +96,33 @@ export function RecentUpdates({ onDownload, onDelete, downloadingIds, showPrevie
 
   const pendingUpdates = updates.filter((u) => !u.is_downloaded)
 
+  // 按作者分组
+  const authorGroups = useMemo<AuthorGroup[]>(() => {
+    if (!groupByAuthor) return []
+    
+    return updates.reduce((acc: AuthorGroup[], update: RecentUpdate) => {
+      let authorGroup = acc.find((g) => g.author === update.author)
+      if (!authorGroup) {
+        authorGroup = { author: update.author, mangas: [] }
+        acc.push(authorGroup)
+      }
+      authorGroup.mangas.push(update)
+      return acc
+    }, [])
+  }, [updates, groupByAuthor])
+
   const handleDownloadAll = async () => {
     if (pendingUpdates.length === 0) return
 
     for (const update of pendingUpdates) {
       await onDownload(update)
+    }
+  }
+
+  const handleDownloadAllForAuthor = async (mangas: MangaItem[]) => {
+    for (const manga of mangas) {
+      // RecentUpdate 继承自 MangaItem，所以可以安全转换
+      await onDownload(manga as RecentUpdate)
     }
   }
 
@@ -124,7 +150,19 @@ export function RecentUpdates({ onDownload, onDelete, downloadingIds, showPrevie
             </span>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 glass-card px-3 py-2 rounded-lg">
+              <Users className="w-4 h-4 text-muted-foreground" />
+              <Label htmlFor="group-by-author-toggle" className="text-sm cursor-pointer">
+                按作者分类
+              </Label>
+              <Switch 
+                id="group-by-author-toggle" 
+                checked={groupByAuthor} 
+                onCheckedChange={setGroupByAuthor} 
+              />
+            </div>
+
             <Button
               onClick={handleRefresh}
               variant="outline"
@@ -136,7 +174,7 @@ export function RecentUpdates({ onDownload, onDelete, downloadingIds, showPrevie
               {isLoading ? "更新中..." : "刷新更新"}
             </Button>
 
-            {pendingUpdates.length > 0 && (
+            {!groupByAuthor && pendingUpdates.length > 0 && (
               <Button
                 onClick={handleDownloadAll}
                 variant="default"
@@ -151,20 +189,39 @@ export function RecentUpdates({ onDownload, onDelete, downloadingIds, showPrevie
       </div>
 
       <div className="p-6">
-        <div
-          className={`grid gap-3 ${showPreview ? "grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5" : "grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 2xl:grid-cols-10"}`}
-        >
-          {updates.map((update) => (
-            <MangaCard
-              key={update.id}
-              manga={update}
-              onDownload={onDownload}
-              onDelete={onDelete}
-              isDownloading={downloadingIds.has(update.id)}
-              showPreview={showPreview}
-            />
-          ))}
-        </div>
+        {groupByAuthor ? (
+          <div className="space-y-6">
+            {authorGroups.map((authorGroup) => (
+              <AuthorSection
+                key={authorGroup.author}
+                authorGroup={authorGroup}
+                onDownload={(manga: MangaItem) => onDownload(manga as RecentUpdate)}
+                onDownloadAll={handleDownloadAllForAuthor}
+                onDelete={(manga: MangaItem) => onDelete(manga as RecentUpdate)}
+                downloadingIds={downloadingIds}
+                showPreview={showPreview}
+                selectionMode={false}
+                selectedIds={new Set()}
+                onToggleSelect={undefined}
+              />
+            ))}
+          </div>
+        ) : (
+          <div
+            className={`grid gap-3 ${showPreview ? "grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5" : "grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 2xl:grid-cols-10"}`}
+          >
+            {updates.map((update) => (
+              <MangaCard
+                key={update.id}
+                manga={update}
+                onDownload={(manga: MangaItem) => onDownload(manga as RecentUpdate)}
+                onDelete={(manga: MangaItem) => onDelete(manga as RecentUpdate)}
+                isDownloading={downloadingIds.has(update.id)}
+                showPreview={showPreview}
+              />
+            ))}
+          </div>
+        )}
       </div>
     </div>
   )

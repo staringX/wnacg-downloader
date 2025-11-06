@@ -31,16 +31,11 @@ export function AuthorSection({
 }: AuthorSectionProps) {
   const [isExpanded, setIsExpanded] = useState(true)
 
-  const allMangas = selectionMode
-    ? authorGroup.mangas.filter((m) => m.downloaded_at || m.is_downloaded)
-    : authorGroup.mangas
+  // 在多选模式下，显示所有漫画（包括未下载的），允许选择任何漫画进行删除
+  const allMangas = authorGroup.mangas
 
   const pendingMangas = authorGroup.mangas.filter((m) => !m.downloaded_at && !m.is_downloaded)
   const downloadedCount = authorGroup.mangas.length - pendingMangas.length
-
-  if (selectionMode && allMangas.length === 0) {
-    return null
-  }
 
   return (
     <div className="glass rounded-lg overflow-hidden">
@@ -53,7 +48,7 @@ export function AuthorSection({
             {isExpanded ? <ChevronDown className="w-5 h-5" /> : <ChevronRight className="w-5 h-5" />}
             <h2 className="text-xl font-bold">{authorGroup.author}</h2>
             <span className="text-sm text-muted-foreground glass-muted px-2 py-0.5 rounded-full">
-              {selectionMode ? `${allMangas.length} 已下载` : `${downloadedCount}/${authorGroup.mangas.length} 已下载`}
+              {selectionMode ? `共 ${allMangas.length} 个` : `${downloadedCount}/${authorGroup.mangas.length} 已下载`}
             </span>
           </button>
 
