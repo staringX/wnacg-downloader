@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { MangaCard } from "./manga-card"
 import { Button } from "@/components/ui/button"
 import { Download, Sparkles, RefreshCw } from "lucide-react"
@@ -14,16 +14,56 @@ interface RecentUpdatesProps {
   onDelete: (manga: RecentUpdate) => void // Added delete callback
   downloadingIds: Set<string>
   showPreview?: boolean
+  refreshTrigger?: number // 当这个值变化时，触发数据获取
 }
 
-export function RecentUpdates({ onDownload, onDelete, downloadingIds, showPreview = false }: RecentUpdatesProps) {
-  const [updates, setUpdates] = useState<RecentUpdate[]>(mockRecentUpdates)
+export function RecentUpdates({ onDownload, onDelete, downloadingIds, showPreview = false, refreshTrigger = 0 }: RecentUpdatesProps) {
+  const [updates, setUpdates] = useState<RecentUpdate[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const { toast } = useToast()
+
+  // 组件加载时或refreshTrigger变化时自动获取最近更新
+  useEffect(() => {
+    const loadUpdates = async () => {
+      setIsLoading(true)
+      try {
+        const response = await api.fetchRecentUpdates()
+        if (response.success && response.data) {
+          setUpdates(response.data)
+        } else {
+          // 如果获取失败，使用mock数据
+          setUpdates(mockRecentUpdates)
+        }
+      } catch (error) {
+        console.error("Load recent updates error:", error)
+        setUpdates(mockRecentUpdates)
+      } finally {
+        setIsLoading(false)
+      }
+    }
+    loadUpdates()
+  }, [refreshTrigger]) // 当refreshTrigger变化时，重新获取数据
 
   const handleRefresh = async () => {
     setIsLoading(true)
     try {
+      // 先同步最近更新
+      const syncResponse = await api.syncRecentUpdates()
+      if (!syncResponse.success) {
+        toast({
+          title: "同步失败",
+          description: syncResponse.error || "同步最近更新失败",
+          variant: "destructive",
+        })
+        // 即使同步失败，也尝试获取已有数据
+      } else {
+        toast({
+          title: "同步成功",
+          description: syncResponse.data?.message || "正在获取更新...",
+        })
+      }
+      
+      // 然后获取更新后的数据
       const response = await api.fetchRecentUpdates()
       if (response.success && response.data) {
         setUpdates(response.data)
@@ -33,8 +73,8 @@ export function RecentUpdates({ onDownload, onDelete, downloadingIds, showPrevie
         })
       } else {
         toast({
-          title: "更新失败",
-          description: "使用本地数据",
+          title: "获取失败",
+          description: "无法获取最近更新数据",
           variant: "destructive",
         })
       }
@@ -42,7 +82,7 @@ export function RecentUpdates({ onDownload, onDelete, downloadingIds, showPrevie
       console.error("[v0] Refresh recent updates error:", error)
       toast({
         title: "更新失败",
-        description: "使用本地数据",
+        description: error instanceof Error ? error.message : "未知错误",
         variant: "destructive",
       })
     } finally {

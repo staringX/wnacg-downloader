@@ -21,6 +21,7 @@ export default function HomePage() {
   const [showPreview, setShowPreview] = useState(false)
   const [selectionMode, setSelectionMode] = useState(false)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [recentUpdatesKey, setRecentUpdatesKey] = useState(0) // 用于强制重新渲染RecentUpdates组件
   const { toast } = useToast()
 
   const loadMangas = async () => {
@@ -323,7 +324,13 @@ export default function HomePage() {
       </header>
 
       <main className="container mx-auto px-4 py-6">
-        <Tabs defaultValue="collection" className="w-full">
+        <Tabs defaultValue="collection" className="w-full" onValueChange={(value) => {
+          // 当切换到"最近更新"标签页时，触发数据获取
+          if (value === "updates") {
+            // 通过更新key强制重新渲染RecentUpdates组件，触发useEffect
+            setRecentUpdatesKey(prev => prev + 1)
+          }
+        }}>
           <TabsList className="mb-6 glass">
             <TabsTrigger value="collection" className="gap-2">
               <Library className="w-4 h-4" />
@@ -364,6 +371,7 @@ export default function HomePage() {
 
           <TabsContent value="updates">
             <RecentUpdates
+              refreshTrigger={recentUpdatesKey}
               onDownload={handleDownload}
               onDelete={handleDelete}
               downloadingIds={downloadingIds}

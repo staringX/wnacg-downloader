@@ -71,6 +71,18 @@ export const api = {
     }
   },
 
+  // Sync recent updates
+  async syncRecentUpdates(): Promise<ApiResponse<any>> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/sync-recent-updates`, { method: "POST" })
+      if (!response.ok) throw new Error("Failed to sync recent updates")
+      const data = await response.json()
+      return { success: true, data }
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : "Unknown error" }
+    }
+  },
+
   async deleteManga(mangaId: string): Promise<ApiResponse<any>> {
     try {
       const response = await fetch(`${API_BASE_URL}/api/manga/${mangaId}`, { method: "DELETE" })
