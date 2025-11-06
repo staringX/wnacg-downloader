@@ -4,6 +4,7 @@ from app.config import settings
 from app.routers import manga
 from app.database import Base, engine
 from app.utils.logger import logger
+from app import models  # 🔥 必须导入models，否则Base.metadata找不到表
 
 # 创建数据库表
 Base.metadata.create_all(bind=engine)

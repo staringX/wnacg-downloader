@@ -11,12 +11,13 @@ COPY pnpm-lock.yaml* ./
 
 # Install dependencies
 RUN npm install -g pnpm
-RUN pnpm install --frozen-lockfile
+RUN pnpm install --no-frozen-lockfile
 
 # Rebuild the source code only when needed
 FROM base AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
+# Copy source files (excluding node_modules via .dockerignore)
 COPY . .
 
 # Build Next.js app

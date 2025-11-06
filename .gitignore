@@ -93,3 +93,13 @@ covers/
 
 *.backup_*
 *_get_collection_new.py
+
+# 测试文件
+test_*.py
+*_test.py
+test_db_init.py
+
+# 日志文件（保留logs目录结构，但忽略日志内容）
+backend/logs/*.log
+backend/logs/*.log.zip
+!backend/logs/.gitkeep

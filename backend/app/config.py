@@ -3,8 +3,8 @@ from typing import List
 
 
 class Settings(BaseSettings):
-    # 数据库配置 - 默认使用SQLite便于本地测试
-    database_url: str = "sqlite:///./manga.db"
+    # 数据库配置 - PostgreSQL
+    database_url: str = "postgresql://manga_user:manga_pass@db:5432/manga_db"
     
     # 漫画网站账号
     manga_username: str = "lilifan456"

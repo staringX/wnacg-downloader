@@ -42,10 +42,41 @@ class MangaCrawler:
         chrome_options.add_argument('--window-size=1920,1080')
         chrome_options.add_argument('--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')
         
+        # 在Docker环境中，chromedriver可能在/usr/local/bin/chromedriver或/usr/bin/chromedriver
+        import os
+        chromedriver_paths = [
+            '/usr/local/bin/chromedriver',
+            '/usr/bin/chromedriver',
+            '/usr/bin/chromium-driver'
+        ]
+        
+        # 检查是否使用Chromium（Docker环境）
+        chromium_binary_paths = [
+            '/usr/bin/chromium',
+            '/usr/bin/chromium-browser'
+        ]
+        
+        chromedriver_path = None
+        for path in chromedriver_paths:
+            if os.path.exists(path):
+                chromedriver_path = path
+                break
+        
+        # 如果找到Chromium，设置binary路径
+        for chromium_path in chromium_binary_paths:
+            if os.path.exists(chromium_path):
+                chrome_options.binary_location = chromium_path
+                break
+        
         try:
-            self.driver = webdriver.Chrome(options=chrome_options)
+            if chromedriver_path:
+                service = Service(chromedriver_path)
+                self.driver = webdriver.Chrome(service=service, options=chrome_options)
+            else:
+                # 尝试自动检测
+                self.driver = webdriver.Chrome(options=chrome_options)
         except Exception as e:
-            print(f"警告：无法初始化Chrome驱动: {e}")
+            logger.error(f"无法初始化Chrome驱动: {e}")
             self.driver = None
     
     def get_available_url(self) -> Optional[str]:
@@ -234,14 +265,18 @@ class MangaCrawler:
                                 if manga_url in manga_urls_set:
                                     continue
                                 
-                                # 尝试获取页数信息
+                                # 尝试获取页数信息（使用class名称，避免汉字字符串）
                                 page_count = None
                                 try:
-                                    parent = manga_link.find_element(By.XPATH, "./ancestor::*[contains(text(), '頁數')]")
-                                    page_text = parent.text
-                                    page_match = re.search(r'頁數[：:]\s*(\d+)', page_text)
-                                    if page_match:
-                                        page_count = int(page_match.group(1))
+                                    # 查找包含漫画链接的父容器，然后查找 p.l_detla 元素
+                                    parent_container = manga_link.find_element(By.XPATH, "./ancestor::*[contains(@class, 'u_listcon') or contains(@class, 'box_cel')]")
+                                    page_elem = parent_container.find_element(By.CSS_SELECTOR, "p.l_detla")
+                                    if page_elem:
+                                        page_text = page_elem.text
+                                        # 从文本中提取数字（格式：頁數：20 或 頁數：20P）
+                                        page_match = re.search(r'(\d+)\s*P?', page_text)
+                                        if page_match:
+                                            page_count = int(page_match.group(1))
                                 except:
                                     pass
                                 
@@ -266,36 +301,36 @@ class MangaCrawler:
                             print(f"    第 {page_num} 页没有找到漫画，停止翻页")
                             break
                         
-                        # 查找"下一页"或"后頁"链接
-                        next_page_link = None
+                        # 查找下一页链接（使用HTML元素和Class名称，避免汉字字符串）
+                        next_page_url = None
                         try:
-                            # 方法1：通过文本查找（后頁>、下一頁等）
-                            next_links = self.driver.find_elements(By.XPATH, "//a[contains(text(), '後頁') or contains(text(), '后页') or contains(text(), '下一頁') or contains(text(), '下一页')]")
-                            if next_links:
-                                next_page_link = next_links[0]
-                                print(f"    找到下一页链接（文本匹配）")
-                        except Exception as e:
-                            print(f"    方法1查找下一页失败: {e}")
-                        
-                        if not next_page_link:
-                            try:
-                                # 方法2：查找包含 users-users_fav 和 category_id 且未访问的链接
-                                all_page_links = self.driver.find_elements(By.CSS_SELECTOR, f"a[href*='users-users_fav'][href*='c-{category_id}']")
-                                for link in all_page_links:
+                            # 通过分页器结构查找（使用class名称）
+                            paginator = self.driver.find_element(By.CSS_SELECTOR, ".paginator")
+                            if paginator:
+                                # 查找所有分页链接（在paginator内的a标签）
+                                page_links = paginator.find_elements(By.CSS_SELECTOR, f"a[href*='users-users_fav'][href*='c-{category_id}'][href*='-page-']")
+                                for link in page_links:
                                     href = link.get_attribute('href')
-                                    if href and href not in visited_urls and '-page-' in href:
-                                        next_page_link = link
+                                    if href and href not in visited_urls:
+                                        next_page_url = href
                                         print(f"    找到下一页链接（URL模式匹配）")
                                         break
-                            except Exception as e:
-                                print(f"    方法2查找下一页失败: {e}")
+                        except Exception as e:
+                            print(f"    查找下一页失败: {e}")
                         
-                        if not next_page_link:
+                        if not next_page_url:
                             print(f"    没有找到下一页链接，停止翻页")
                             break
                         
-                        # 获取下一页 URL
-                        current_url = next_page_link.get_attribute('href')
+                        # 确保URL是完整的（处理相对路径）
+                        if next_page_url.startswith('/'):
+                            base = self.base_url.rstrip('/')
+                            next_page_url = f"{base}{next_page_url}"
+                        elif not next_page_url.startswith('http'):
+                            base = self.base_url.rstrip('/')
+                            next_page_url = f"{base}/{next_page_url}"
+                        
+                        current_url = next_page_url
                         if not current_url:
                             print(f"    下一页链接无效，停止翻页")
                             break
@@ -331,14 +366,18 @@ class MangaCrawler:
                             except:
                                 pass
                             
-                            # 获取页数
+                            # 获取页数（使用class名称，避免汉字字符串）
                             page_count = None
                             try:
-                                parent = manga_link.find_element(By.XPATH, "./ancestor::*[contains(text(), '頁數')]")
-                                page_text = parent.text
-                                page_match = re.search(r'頁數[：:]\s*(\d+)', page_text)
-                                if page_match:
-                                    page_count = int(page_match.group(1))
+                                # 查找包含漫画链接的父容器，然后查找 p.l_detla 元素
+                                parent_container = manga_link.find_element(By.XPATH, "./ancestor::*[contains(@class, 'u_listcon') or contains(@class, 'box_cel')]")
+                                page_elem = parent_container.find_element(By.CSS_SELECTOR, "p.l_detla")
+                                if page_elem:
+                                    page_text = page_elem.text
+                                    # 从文本中提取数字（格式：頁數：20 或 頁數：20P）
+                                    page_match = re.search(r'(\d+)\s*P?', page_text)
+                                    if page_match:
+                                        page_count = int(page_match.group(1))
                             except:
                                 pass
                             
@@ -445,31 +484,66 @@ class MangaCrawler:
                         
                         # 查找该页面下的所有漫画链接
                         manga_links = self.driver.find_elements(By.CSS_SELECTOR, "a[href*='photos-index-aid-']")
-                        page_manga_count = 0
+                        print(f"    🔍 CSS找到 {len(manga_links)} 个链接")
                         
-                        # 按照页面顺序处理漫画链接
+                        # 🔥 关键修复：立即提取所有链接信息，避免stale element reference
+                        manga_info_list = []
                         for manga_link in manga_links:
                             try:
                                 manga_url = manga_link.get_attribute('href')
                                 title = manga_link.text.strip()
                                 
+                                # 尝试获取页数信息（使用class名称，避免汉字字符串）
+                                page_count = None
+                                try:
+                                    # 查找包含漫画链接的父容器，然后查找 p.l_detla 元素
+                                    parent_container = manga_link.find_element(By.XPATH, "./ancestor::*[contains(@class, 'u_listcon') or contains(@class, 'box_cel')]")
+                                    page_elem = parent_container.find_element(By.CSS_SELECTOR, "p.l_detla")
+                                    if page_elem:
+                                        page_text = page_elem.text
+                                        # 从文本中提取数字（格式：頁數：20 或 頁數：20P）
+                                        page_match = re.search(r'(\d+)\s*P?', page_text)
+                                        if page_match:
+                                            page_count = int(page_match.group(1))
+                                except:
+                                    pass
+                                
+                                if manga_url and title:
+                                    manga_info_list.append({
+                                        'url': manga_url,
+                                        'title': title,
+                                        'page_count': page_count
+                                    })
+                            except Exception as e:
+                                # 如果获取信息失败，跳过这个链接
+                                continue
+                        
+                        # 现在处理提取的信息列表
+                        page_manga_count = 0
+                        empty_count = 0
+                        dup_count = 0
+                        
+                        for idx, manga_info in enumerate(manga_info_list, 1):
+                            try:
+                                manga_url = manga_info['url']
+                                title = manga_info['title']
+                                page_count = manga_info.get('page_count')
+                                
+                                if idx <= 3:  # 打印前3个
+                                    print(f"      [{idx}] URL={manga_url[-30:]}, Title='{title[:50]}'")
+                                
                                 if not title or not manga_url:
+                                    empty_count += 1
+                                    if idx <= 3:
+                                        print(f"      [{idx}] ❌ 跳过：标题或URL为空")
                                     continue
                                 
                                 # 去重
                                 if manga_url in manga_urls_set:
+                                    dup_count += 1
+                                    if idx <= 3:
+                                        print(f"      [{idx}] ⏭️  跳过：重复")
                                     continue
-                                
-                                # 尝试获取页数信息
-                                page_count = None
-                                try:
-                                    parent = manga_link.find_element(By.XPATH, "./ancestor::*[contains(text(), '頁數')]")
-                                    page_text = parent.text
-                                    page_match = re.search(r'頁數[：:]\s*(\d+)', page_text)
-                                    if page_match:
-                                        page_count = int(page_match.group(1))
-                                except:
-                                    pass
                                 
                                 # ✨ 关键：立即 yield，不等待后续爬取
                                 manga_urls_set.add(manga_url)
@@ -489,41 +563,61 @@ class MangaCrawler:
                                 continue
                         
                         print(f"    第 {page_num} 页：找到 {page_manga_count} 个漫画（总计: {total_count}）")
+                        print(f"    📊 跳过：空标题/URL={empty_count}, 重复={dup_count}")
                         
                         if page_manga_count == 0:
                             print(f"    第 {page_num} 页没有找到漫画，停止翻页")
                             break
                         
-                        # 查找下一页链接（必须是收藏夹的翻页，不是漫画详情的翻页）
-                        next_page_link = None
+                        # 查找下一页链接（使用HTML元素和Class名称，避免汉字字符串）
+                        next_page_url = None
+                        
+                        # 🔥 关键修复：先收集所有可能的翻页链接URL，避免stale element reference
+                        candidate_urls = []
+                        
                         try:
-                            # 方法1：查找包含"後頁"且URL包含users-users_fav的链接
-                            next_links = self.driver.find_elements(By.XPATH, "//a[contains(@href, 'users-users_fav') and (contains(text(), '後頁') or contains(text(), '后页') or contains(text(), '下一頁') or contains(text(), '下一页'))]")
-                            if next_links:
-                                next_page_link = next_links[0]
-                                print(f"    找到下一页链接（文本匹配）: {next_page_link.get_attribute('href')[:80]}")
+                            # 方法1：通过分页器结构查找（使用class名称）
+                            # 查找 .paginator 中的链接，当前页是 span.thispage，下一页是下一个 a 标签
+                            paginator = self.driver.find_element(By.CSS_SELECTOR, ".paginator")
+                            if paginator:
+                                # 查找所有分页链接（在paginator内的a标签）
+                                page_links = paginator.find_elements(By.CSS_SELECTOR, "a[href*='users-users_fav'][href*='-page-']")
+                                for link in page_links:
+                                    href = link.get_attribute('href')
+                                    # 必须包含 users-users_fav 和 page，且未访问过，且包含当前category_id
+                                    if href and href not in visited_urls and '-page-' in href and f'c-{category_id}' in href:
+                                        candidate_urls.append(href)
                         except Exception as e:
                             pass
                         
-                        if not next_page_link:
+                        if not candidate_urls:
                             try:
-                                # 方法2：查找 users-users_fav 且包含当前 category_id 的分页链接
-                                all_page_links = self.driver.find_elements(By.CSS_SELECTOR, f"a[href*='users-users_fav'][href*='c-{category_id}']")
+                                # 方法2：直接查找所有符合条件的分页链接（备用方法）
+                                all_page_links = self.driver.find_elements(By.CSS_SELECTOR, f"a[href*='users-users_fav'][href*='c-{category_id}'][href*='-page-']")
                                 for link in all_page_links:
                                     href = link.get_attribute('href')
-                                    # 必须包含 users-users_fav 和 page，且未访问过
-                                    if href and href not in visited_urls and '-page-' in href and 'users-users_fav' in href:
-                                        next_page_link = link
-                                        print(f"    找到下一页链接（URL匹配）: {href[:80]}")
-                                        break
+                                    if href and href not in visited_urls:
+                                        candidate_urls.append(href)
                             except Exception as e:
                                 pass
                         
-                        if not next_page_link:
+                        # 从候选中选择第一个未访问的URL
+                        if candidate_urls:
+                            next_page_url = candidate_urls[0]
+                            # 🔥 确保URL是完整的（处理相对路径）
+                            if next_page_url.startswith('/'):
+                                base = self.base_url.rstrip('/')
+                                next_page_url = f"{base}{next_page_url}"
+                            elif not next_page_url.startswith('http'):
+                                base = self.base_url.rstrip('/')
+                                next_page_url = f"{base}/{next_page_url}"
+                            print(f"    找到下一页链接: {next_page_url[:80]}")
+                        
+                        if not next_page_url:
                             print(f"    没有找到下一页链接，停止翻页")
                             break
                         
-                        current_url = next_page_link.get_attribute('href')
+                        current_url = next_page_url
                         if not current_url:
                             print(f"    下一页链接无效，停止翻页")
                             break
@@ -558,11 +652,15 @@ class MangaCrawler:
                             
                             page_count = None
                             try:
-                                parent = manga_link.find_element(By.XPATH, "./ancestor::*[contains(text(), '頁數')]")
-                                page_text = parent.text
-                                page_match = re.search(r'頁數[：:]\s*(\d+)', page_text)
-                                if page_match:
-                                    page_count = int(page_match.group(1))
+                                # 查找包含漫画链接的父容器，然后查找 p.l_detla 元素
+                                parent_container = manga_link.find_element(By.XPATH, "./ancestor::*[contains(@class, 'u_listcon') or contains(@class, 'box_cel')]")
+                                page_elem = parent_container.find_element(By.CSS_SELECTOR, "p.l_detla")
+                                if page_elem:
+                                    page_text = page_elem.text
+                                    # 从文本中提取数字（格式：頁數：20 或 頁數：20P）
+                                    page_match = re.search(r'(\d+)\s*P?', page_text)
+                                    if page_match:
+                                        page_count = int(page_match.group(1))
                             except:
                                 pass
                             
@@ -605,27 +703,28 @@ class MangaCrawler:
             except:
                 pass
             
-            # 获取页数 - 格式："頁數：20P"
+            # 获取页数（使用class名称，避免汉字字符串）
             page_count = None
             try:
-                page_elem = self.driver.find_element(By.XPATH, "//*[contains(text(), '頁數')]")
+                # 使用 p.l_detla class 查找页数信息
+                page_elem = self.driver.find_element(By.CSS_SELECTOR, "p.l_detla")
                 page_text = page_elem.text  # 例如: "頁數：20P"
-                # 提取数字部分
-                page_match = re.search(r'頁數[：:]\s*(\d+)', page_text)
+                # 从文本中提取数字（格式：頁數：20 或 頁數：20P）
+                page_match = re.search(r'(\d+)\s*P?', page_text)
                 if page_match:
                     page_count = int(page_match.group(1))
             except Exception as e:
                 print(f"    获取页数失败: {e}")
             
-            # 获取上传日期 - 从图片列表中的"上傳於2023-06-22"提取
+            # 获取上传日期（使用class名称，避免汉字字符串）
             updated_at = None
             try:
-                # 查找所有包含"上傳於"的元素
-                upload_elems = self.driver.find_elements(By.XPATH, "//*[contains(text(), '上傳於')]")
-                if upload_elems:
-                    # 取第一个图片的上传日期作为漫画更新日期
-                    upload_text = upload_elems[0].text  # 例如: "上傳於2023-06-22"
-                    date_match = re.search(r'上傳於(\d{4}-\d{2}-\d{2})', upload_text)
+                # 查找图片列表项（使用 .gallary_item class）
+                gallery_items = self.driver.find_elements(By.CSS_SELECTOR, ".gallary_item")
+                if gallery_items:
+                    # 从第一个图片项中提取日期（格式：YYYY-MM-DD）
+                    first_item_text = gallery_items[0].text
+                    date_match = re.search(r'(\d{4}-\d{2}-\d{2})', first_item_text)
                     if date_match:
                         date_str = date_match.group(1)
                         updated_at = datetime.strptime(date_str, '%Y-%m-%d')
@@ -713,34 +812,47 @@ class MangaCrawler:
                 
                 print(f"    找到 {page_view_count} 个图片链接（总计: {len(view_urls)}）")
                 
-                # 查找"下一页"或"后頁"链接
-                next_page_link = None
+                # 查找下一页链接（使用HTML元素和Class名称，避免汉字字符串）
+                next_page_url = None
                 try:
-                    # 方法1：通过文本查找（后頁>、下一頁等）
-                    next_links = self.driver.find_elements(By.XPATH, "//a[contains(text(), '後頁') or contains(text(), '后页') or contains(text(), '下一頁') or contains(text(), '下一页')]")
-                    if next_links:
-                        next_page_link = next_links[0]
+                    # 通过分页器结构查找（使用class名称）
+                    paginator = self.driver.find_element(By.CSS_SELECTOR, ".paginator")
+                    if paginator:
+                        # 查找所有分页链接（在paginator内的a标签，包含photos-index和-page-）
+                        page_links = paginator.find_elements(By.CSS_SELECTOR, "a[href*='photos-index'][href*='-page-']")
+                        for link in page_links:
+                            href = link.get_attribute('href')
+                            if href and href not in visited_page_urls:
+                                next_page_url = href
+                                break
                 except:
                     pass
                 
-                if not next_page_link:
+                if not next_page_url:
                     try:
-                        # 方法2：查找包含 photos-index 且未访问的分页链接
-                        all_page_links = self.driver.find_elements(By.CSS_SELECTOR, "a[href*='photos-index']")
+                        # 备用方法：直接查找所有符合条件的分页链接
+                        all_page_links = self.driver.find_elements(By.CSS_SELECTOR, "a[href*='photos-index'][href*='-page-']")
                         for link in all_page_links:
                             href = link.get_attribute('href')
-                            if href and href not in visited_page_urls and '-page-' in href:
-                                next_page_link = link
+                            if href and href not in visited_page_urls:
+                                next_page_url = href
                                 break
                     except:
                         pass
                 
-                if not next_page_link:
+                if not next_page_url:
                     print(f"    没有找到下一页链接，扫描完成")
                     break
                 
-                # 获取下一页 URL
-                current_url = next_page_link.get_attribute('href')
+                # 确保URL是完整的（处理相对路径）
+                if next_page_url.startswith('/'):
+                    base = self.base_url.rstrip('/')
+                    next_page_url = f"{base}{next_page_url}"
+                elif not next_page_url.startswith('http'):
+                    base = self.base_url.rstrip('/')
+                    next_page_url = f"{base}/{next_page_url}"
+                
+                current_url = next_page_url
                 if not current_url:
                     print(f"    下一页链接无效，停止扫描")
                     break
