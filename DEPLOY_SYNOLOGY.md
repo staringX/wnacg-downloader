@@ -10,9 +10,9 @@
 
 ## 部署步骤
 
-### 方式一：自动从GitHub部署（最简单，推荐）⭐
+### 方式一：使用Docker Compose自动从GitHub拉取（推荐）⭐
 
-这种方式会自动从GitHub拉取代码，无需手动克隆。
+使用 `docker-compose.synology.auto.yml`，它包含一个init容器自动从GitHub拉取代码，**无需手动克隆仓库**。
 
 #### 1. SSH连接到群晖NAS
 
@@ -20,35 +20,31 @@
 ssh admin@您的NAS_IP
 ```
 
-#### 2. 创建项目目录并下载部署脚本
+#### 2. 创建项目目录
 
 ```bash
 # 创建项目目录
 mkdir -p /volume1/docker/wnacg-downloader
 cd /volume1/docker/wnacg-downloader
-
-# 下载部署脚本（只需下载一次）
-curl -O https://raw.githubusercontent.com/staringX/wnacg-downloader/main/deploy-synology.sh
-chmod +x deploy-synology.sh
 ```
 
-#### 3. 运行一键部署脚本
+#### 3. 下载docker-compose配置文件
 
 ```bash
-# 首次运行会自动从GitHub克隆代码
-./deploy-synology.sh
-```
+# 下载自动拉取配置
+curl -O https://raw.githubusercontent.com/staringX/wnacg-downloader/main/docker-compose.synology.auto.yml
 
-脚本会自动：
-- ✅ 从GitHub克隆/更新代码
-- ✅ 创建必要的目录
-- ✅ 从.env.example创建.env文件
-- ✅ 启动所有服务
+# 下载环境变量示例（可选）
+curl -O https://raw.githubusercontent.com/staringX/wnacg-downloader/main/.env.example
+```
 
 #### 4. 配置环境变量
 
-首次部署后，编辑 `.env` 文件：
 ```bash
+# 复制示例文件
+cp .env.example .env
+
+# 编辑环境变量
 nano .env
 ```
 
@@ -56,68 +52,34 @@ nano .env
 ```env
 NEXT_PUBLIC_API_URL=http://您的NAS_IP:8000
 CORS_ORIGINS=["http://您的NAS_IP:3000","http://localhost:3000"]
+MANGA_USERNAME=您的用户名
+MANGA_PASSWORD=您的密码
 ```
 
-#### 5. 重新启动服务
+#### 5. 启动服务（自动从GitHub拉取代码）
 
 ```bash
-cd /volume1/docker/wnacg-downloader
-./deploy-synology.sh
-```
-
-#### 更新项目
-
-以后更新代码只需运行：
-```bash
-cd /volume1/docker/wnacg-downloader
-./deploy-synology.sh
-```
-
-脚本会自动拉取最新代码并重新部署。
-
----
-
-### 方式二：使用Docker Compose自动拉取
-
-使用 `docker-compose.synology.auto.yml`，它包含一个init容器自动从GitHub拉取代码。
-
-#### 1. 初始化项目（仅首次）
-
-```bash
-# SSH连接到NAS
-ssh admin@您的NAS_IP
-
-# 创建目录
-mkdir -p /volume1/docker/wnacg-downloader
-cd /volume1/docker/wnacg-downloader
-
-# 下载初始化脚本
-curl -O https://raw.githubusercontent.com/staringX/wnacg-downloader/main/init-from-github.sh
-chmod +x init-from-github.sh
-
-# 运行初始化（会自动从GitHub克隆代码）
-./init-from-github.sh
-```
-
-#### 2. 配置环境变量
-
-```bash
-# 编辑.env文件
-nano .env
-```
-
-#### 3. 启动服务
-
-```bash
-# 使用自动拉取配置
+# 直接运行，init容器会自动从GitHub克隆/更新代码
 docker-compose -f docker-compose.synology.auto.yml up -d --build
 ```
 
-每次启动时，init容器会自动检查并更新代码。
+**说明**：
+- ✅ 首次运行：init容器会自动从GitHub克隆代码
+- ✅ 后续运行：init容器会自动更新代码到最新版本
+- ✅ 无需手动克隆：所有操作都在docker-compose中自动完成
+
+#### 更新项目
+
+以后更新代码只需重新运行：
+```bash
+docker-compose -f docker-compose.synology.auto.yml up -d --build
+```
+
+init容器会自动拉取最新代码。
 
 ---
 
-### 方式三：手动部署（传统方式）
+### 方式二：手动部署（传统方式）
 
 #### 1. 准备项目文件
 
@@ -210,7 +172,7 @@ docker-compose logs -f
 
 ---
 
-### 方式四：使用群晖Docker GUI部署
+### 方式三：使用群晖Docker GUI部署
 
 #### 1. 准备docker-compose.yml
 

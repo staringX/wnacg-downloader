@@ -1,15 +1,40 @@
 # 群晖NAS自动从GitHub拉取代码的docker-compose配置
 # 
 # 使用方式：
-#   1. 首次部署：先运行 init-from-github.sh 初始化项目
-#   2. 然后运行：docker-compose -f docker-compose.synology.auto.yml up -d
+#   docker-compose -f docker-compose.synology.auto.yml up -d
 #
-# 或者使用一键部署脚本（推荐）：
-#   ./deploy-synology.sh
-#
-# 注意：此配置假设代码已经通过脚本从GitHub拉取到本地
+# 说明：
+#   - init容器会自动从GitHub拉取代码（首次克隆，后续更新）
+#   - 无需手动克隆仓库，直接运行docker-compose即可
+#   - 请确保已配置.env文件（环境变量）
 
 services:
+  # 初始化容器：自动从GitHub拉取代码
+  init:
+    image: alpine/git:latest
+    container_name: wnacg-downloader-init
+    volumes:
+      - /volume1/docker/wnacg-downloader:/workspace
+    working_dir: /workspace
+    command: >
+      sh -c "
+        mkdir -p /workspace &&
+        cd /workspace &&
+        if [ ! -d .git ]; then
+          echo '📥 首次部署：从GitHub克隆仓库...'
+          rm -rf * .[!.]* 2>/dev/null || true &&
+          git clone https://github.com/staringX/wnacg-downloader.git . &&
+          echo '✅ 克隆完成'
+        else
+          echo '🔄 更新代码...'
+          git pull origin main || echo '⚠️  更新失败，使用现有代码'
+        fi &&
+        mkdir -p backend/downloads backend/covers backend/logs &&
+        echo '✅ 代码准备完成'
+      "
+    restart: "no"
+    networks:
+      - wnacg-network
 
   db:
     image: postgres:15-alpine
@@ -53,6 +78,8 @@ services:
     ports:
       - "${BACKEND_PORT:-8000}:8000"
     depends_on:
+      init:
+        condition: service_completed_successfully
       db:
         condition: service_healthy
     restart: unless-stopped
@@ -69,6 +96,8 @@ services:
     environment:
       NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
     depends_on:
+      init:
+        condition: service_completed_successfully
       backend:
         condition: service_started
     restart: unless-stopped
