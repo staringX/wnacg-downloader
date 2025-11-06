@@ -47,20 +47,18 @@ def sync_collection(background_tasks: BackgroundTasks, db: Session = Depends(get
         if not crawler.login(settings.manga_username, settings.manga_password):
             raise HTTPException(status_code=401, detail="登录失败")
         
-        # 获取收藏夹
-        collection = crawler.get_collection()
-        
-        print(f"收藏夹获取完成，共 {len(collection)} 个漫画")
-        if len(collection) == 0:
-            print("警告：收藏夹为空，可能是无法访问书架页面或账号没有收藏")
+        # 🚀 使用生成器：边爬取边保存，真正的实时同步！
+        print(f"开始实时同步（生成器模式）...")
+        print(f"提示：每爬取到一个漫画就会立即保存，刷新页面即可看到最新数据\n")
         
         added_count = 0
         updated_count = 0
+        processed_count = 0
         
-        print(f"\n开始实时同步处理...")
-        
-        # 实时处理：边爬取边保存，每个漫画处理完立即提交
-        for idx, item in enumerate(collection, 1):
+        # 生成器：每yield一个漫画，立即处理并保存
+        for item in crawler.get_collection_stream():
+            processed_count += 1
+            
             try:
                 # 检查是否已存在
                 existing = db.query(Manga).filter(Manga.manga_url == item['manga_url']).first()
@@ -71,10 +69,10 @@ def sync_collection(background_tasks: BackgroundTasks, db: Session = Depends(get
                         existing.page_count = item['page_count']
                         db.commit()
                     updated_count += 1
-                    print(f"  [{idx}/{len(collection)}] ⟳ 已存在: {item['title'][:50]}")
+                    print(f"  [{processed_count}] ⟳ 已存在: {item['title'][:50]}")
                 else:
                     # 新漫画，创建记录并立即保存
-                    print(f"  [{idx}/{len(collection)}] ✚ 新增: {item['title'][:50]}")
+                    print(f"  [{processed_count}] ✚ 新增: {item['title'][:50]}")
                     
                     manga = Manga(
                         title=item['title'],
@@ -83,7 +81,7 @@ def sync_collection(background_tasks: BackgroundTasks, db: Session = Depends(get
                         page_count=item.get('page_count')
                     )
                     db.add(manga)
-                    db.commit()  # 立即提交基本信息，用户可以看到
+                    db.commit()  # 🔥 立即提交！用户刷新页面就能看到
                     db.refresh(manga)  # 刷新对象以获取ID
                     
                     added_count += 1
@@ -100,7 +98,7 @@ def sync_collection(background_tasks: BackgroundTasks, db: Session = Depends(get
                                 manga.updated_at = details['updated_at']
                             if details.get('cover_image_url'):
                                 manga.cover_image_url = details['cover_image_url']
-                            db.commit()  # 立即提交详细信息
+                            db.commit()  # 🔥 再次提交详情！
                             print(f"       ✓ 详情: 页数={manga.page_count}, 更新={str(manga.updated_at)[:10] if manga.updated_at else 'N/A'}")
                         else:
                             print(f"       ⚠ 无法获取详细信息")
@@ -110,7 +108,7 @@ def sync_collection(background_tasks: BackgroundTasks, db: Session = Depends(get
                         # 详情获取失败不影响基本记录的保存，继续处理下一个
                     
             except Exception as e:
-                print(f"  [{idx}/{len(collection)}] ✗ 处理失败: {item.get('title', 'Unknown')[:50]} - {e}")
+                print(f"  [{processed_count}] ✗ 处理失败: {item.get('title', 'Unknown')[:50]} - {e}")
                 db.rollback()  # 回滚当前失败的事务
                 continue
         
