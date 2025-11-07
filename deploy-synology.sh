@@ -9,7 +9,7 @@ set -e
 PROJECT_DIR="/volume1/docker/wnacg-downloader"
 GITHUB_REPO="https://github.com/staringX/wnacg-downloader.git"
 BRANCH="main"
-COMPOSE_FILE="docker-compose.synology.auto.yml"
+COMPOSE_FILE="docker-compose.synology.yml"
 
 echo "=========================================="
 echo "群晖NAS一键部署脚本"
@@ -65,9 +65,13 @@ fi
 echo "🛑 停止现有服务..."
 docker-compose -f "$COMPOSE_FILE" down 2>/dev/null || true
 
+# 拉取最新镜像
+echo "📥 拉取最新镜像..."
+docker-compose -f "$COMPOSE_FILE" pull
+
 # 启动服务
 echo "🚀 启动服务..."
-docker-compose -f "$COMPOSE_FILE" up -d --build
+docker-compose -f "$COMPOSE_FILE" up -d
 
 # 等待服务启动
 echo "⏳ 等待服务启动..."

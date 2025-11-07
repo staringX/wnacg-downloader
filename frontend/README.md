@@ -28,11 +28,7 @@ npm install
 
 ### 2. 配置数据库
 
-运行SQL脚本创建数据库表：
-
-\`\`\`bash
-# 在v0界面中运行 scripts/001_create_manga_tables.sql
-\`\`\`
+数据库表会在后端启动时自动创建（使用SQLAlchemy ORM）。
 
 ### 3. 实现爬虫逻辑
 
