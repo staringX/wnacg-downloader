@@ -5,7 +5,7 @@ from typing import List, Dict
 from datetime import datetime
 from urllib.parse import quote, urlparse, parse_qs, urlencode
 from selenium.webdriver.common.by import By
-from app.utils.logger import logger
+from app.utils.logger import logger, get_error_message
 
 
 class SearchCrawler:
@@ -137,10 +137,10 @@ class SearchCrawler:
                                 'cover_image_url': cover_image_url
                             })
                         except Exception as e:
-                            logger.warning(f"    提取漫画信息失败: {e}")
+                            logger.warning(f"    提取漫画信息失败: {get_error_message(e)}")
                             continue
                 except Exception as e:
-                    logger.warning(f"    查找漫画列表失败: {e}")
+                    logger.warning(f"    查找漫画列表失败: {get_error_message(e)}")
                     # 备用方法：直接查找所有漫画链接
                     manga_links = self.driver.find_elements(By.CSS_SELECTOR, "a[href*='photos-index-aid-']")
                     logger.info(f"    备用方法找到 {len(manga_links)} 个漫画链接")
@@ -239,7 +239,7 @@ class SearchCrawler:
                                     logger.info(f"    ✓ 找到页码为 {next_page_num} 的链接: {next_page_url[:80]}")
                                     break
                 except Exception as e:
-                    logger.debug(f"    查找分页器失败: {e}")
+                    logger.debug(f"    查找分页器失败: {get_error_message(e)}")
                     pass
                 
                 # 如果找不到下一页链接，说明已经到最后一页，遍历完当前页后结束
@@ -259,8 +259,6 @@ class SearchCrawler:
             return all_mangas
             
         except Exception as e:
-            logger.error(f"搜索作者 {author_name} 失败: {e}")
-            import traceback
-            traceback.print_exc()
+            logger.error(f"搜索作者 {author_name} 失败: {get_error_message(e)}")
             return []
 

@@ -24,6 +24,7 @@ export function useTaskStatus(taskId: string | null) {
   const [task, setTask] = useState<TaskStatus | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const eventSourceRef = useRef<EventSource | null>(null)
+  const fallbackIntervalRef = useRef<NodeJS.Timeout | null>(null)
 
   // 从数据库查询任务状态（用于页面刷新后恢复状态）
   const fetchTask = useCallback(async () => {
@@ -101,24 +102,32 @@ export function useTaskStatus(taskId: string | null) {
     // 监听连接事件
     eventSource.addEventListener("connected", (event) => {
       console.log("SSE连接已建立")
+      // 连接成功时，清除备用轮询
+      if (fallbackIntervalRef.current) {
+        clearInterval(fallbackIntervalRef.current)
+        fallbackIntervalRef.current = null
+        console.log("SSE连接已恢复，停止备用轮询")
+      }
     })
-
+    
     // 错误处理
     eventSource.onerror = (error) => {
       console.error("SSE连接错误:", error)
       // 连接断开时，定期查询任务状态作为备用
-      if (eventSource.readyState === EventSource.CLOSED) {
-        const interval = setInterval(() => {
+      if (eventSource.readyState === EventSource.CLOSED && !fallbackIntervalRef.current) {
+        console.log("SSE连接断开，启用备用轮询（每10秒）")
+        fallbackIntervalRef.current = setInterval(() => {
           fetchTask()
-        }, 2000) // 每2秒查询一次
-
-        // 清理定时器
-        return () => clearInterval(interval)
+        }, 10000) // 每10秒查询一次（降低频率）
       }
     }
 
     // 清理函数
     return () => {
+      if (fallbackIntervalRef.current) {
+        clearInterval(fallbackIntervalRef.current)
+        fallbackIntervalRef.current = null
+      }
       eventSource.close()
       eventSourceRef.current = null
     }
@@ -135,6 +144,8 @@ export function useTaskStatus(taskId: string | null) {
 export function useRunningTasks(taskType?: string) {
   const [tasks, setTasks] = useState<TaskStatus[]>([])
   const [isLoading, setIsLoading] = useState(false)
+  const eventSourceRef = useRef<EventSource | null>(null)
+  const fallbackIntervalRef = useRef<NodeJS.Timeout | null>(null)
 
   const fetchRunningTasks = useCallback(async () => {
     setIsLoading(true)
@@ -155,12 +166,83 @@ export function useRunningTasks(taskType?: string) {
     }
   }, [taskType])
 
+  // 初始化时查询一次
   useEffect(() => {
     fetchRunningTasks()
-    // 定期刷新（作为SSE的备用，但频率较低）
-    const interval = setInterval(fetchRunningTasks, 5000) // 每5秒刷新一次
-    return () => clearInterval(interval)
   }, [fetchRunningTasks])
+
+  // 建立SSE连接监听任务状态更新（通过SSE更新任务列表，而不是轮询）
+  useEffect(() => {
+    // 创建EventSource连接
+    const eventSource = new EventSource(
+      `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/events`
+    )
+    eventSourceRef.current = eventSource
+
+    // 监听任务更新事件，更新任务列表
+    eventSource.addEventListener("task_updated", (event) => {
+      try {
+        const data = JSON.parse(event.data)
+        if (data.data?.task_id) {
+          // 如果任务状态变化，刷新任务列表
+          // 只刷新与当前taskType相关的任务
+          if (!taskType || data.data.task_type === taskType) {
+            fetchRunningTasks()
+          }
+        }
+      } catch (error) {
+        console.error("解析任务更新事件失败:", error)
+      }
+    })
+
+    // 监听任务创建事件
+    eventSource.addEventListener("task_created", (event) => {
+      try {
+        const data = JSON.parse(event.data)
+        if (data.data?.task_id) {
+          // 如果新任务创建，刷新任务列表
+          if (!taskType || data.data.task_type === taskType) {
+            fetchRunningTasks()
+          }
+        }
+      } catch (error) {
+        console.error("解析任务创建事件失败:", error)
+      }
+    })
+
+    // 监听连接事件
+    eventSource.addEventListener("connected", (event) => {
+      console.log("SSE连接已建立（运行中任务列表）")
+      // 连接成功时，清除备用轮询
+      if (fallbackIntervalRef.current) {
+        clearInterval(fallbackIntervalRef.current)
+        fallbackIntervalRef.current = null
+        console.log("SSE连接已恢复，停止备用轮询（运行中任务列表）")
+      }
+    })
+
+    // 错误处理（SSE断开时，使用低频轮询作为备用）
+    eventSource.onerror = (error) => {
+      console.error("SSE连接错误（运行中任务列表）:", error)
+      // 连接断开时，使用低频轮询作为备用（每30秒一次）
+      if (eventSource.readyState === EventSource.CLOSED && !fallbackIntervalRef.current) {
+        console.log("SSE连接断开，启用备用轮询（每30秒）")
+        fallbackIntervalRef.current = setInterval(() => {
+          fetchRunningTasks()
+        }, 30000) // 每30秒查询一次（降低频率）
+      }
+    }
+
+    // 清理函数
+    return () => {
+      if (fallbackIntervalRef.current) {
+        clearInterval(fallbackIntervalRef.current)
+        fallbackIntervalRef.current = null
+      }
+      eventSource.close()
+      eventSourceRef.current = null
+    }
+  }, [taskType, fetchRunningTasks])
 
   return {
     tasks,

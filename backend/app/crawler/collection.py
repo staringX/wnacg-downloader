@@ -3,7 +3,7 @@ import time
 import re
 from typing import Dict, Generator
 from selenium.webdriver.common.by import By
-from app.utils.logger import logger
+from app.utils.logger import logger, get_error_message
 
 
 class CollectionCrawler:
@@ -149,12 +149,12 @@ class CollectionCrawler:
                                     else:
                                         logger.debug(f"    未找到'.next'元素")
                                 except Exception as e:
-                                    logger.debug(f"    未找到'.next > a'链接: {e}")
+                                    logger.debug(f"    未找到'.next > a'链接: {get_error_message(e)}")
                                 
                                 if not next_page_url:
                                     logger.info(f"    ⚠️  未找到'.next > a'链接，这是最后一页，遍历完当前页后将结束")
                             except Exception as e:
-                                logger.warning(f"    查找分页器失败: {e}")
+                                logger.warning(f"    查找分页器失败: {get_error_message(e)}")
                                 pass
                         
                         # 🔥 第二步：遍历当前页面的漫画（此时下一页链接已缓存）
@@ -227,7 +227,7 @@ class CollectionCrawler:
                                 }
                                 
                             except Exception as e:
-                                logger.warning(f"    处理漫画失败: {e}")
+                                logger.warning(f"    处理漫画失败: {get_error_message(e)}")
                                 continue
                         
                         logger.info(f"    第 {page_num} 页：找到 {page_manga_count} 个漫画（总计: {total_count}）")
@@ -303,14 +303,12 @@ class CollectionCrawler:
                                 'page_count': page_count
                             }
                     except Exception as e:
-                        logger.warning(f"处理漫画失败: {e}")
+                        logger.warning(f"处理漫画失败: {get_error_message(e)}")
                         continue
             
             logger.info(f"\n✓ 收藏夹爬取完成，总共 {total_count} 个漫画")
             
         except Exception as e:
-            logger.error(f"获取收藏夹失败: {e}")
-            import traceback
-            traceback.print_exc()
+            logger.error(f"获取收藏夹失败: {get_error_message(e)}")
             return
 

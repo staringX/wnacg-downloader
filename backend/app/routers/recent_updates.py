@@ -8,7 +8,7 @@ from app.models import Manga, RecentUpdate
 from app.schemas import MangaResponse, SyncResponse, TaskCreateResponse
 from app.crawler.base import MangaCrawler
 from app.config import settings
-from app.utils.logger import logger
+from app.utils.logger import logger, get_error_message
 from app.services.task_manager import TaskManager
 
 router = APIRouter(prefix="/api", tags=["recent-updates"])
@@ -149,9 +149,7 @@ def _execute_sync_recent_updates_task(task_id: str, db: Session):
                 processed_authors += 1
                 
             except Exception as e:
-                logger.error(f"处理作者 {author} 时出错: {e}")
-                import traceback
-                traceback.print_exc()
+                logger.error(f"处理作者 {author} 时出错: {get_error_message(e)}")
                 db.rollback()
                 continue
         
@@ -170,10 +168,8 @@ def _execute_sync_recent_updates_task(task_id: str, db: Session):
         logger.info(f"同步最近更新任务完成: 新增/更新 {total_added} 条，删除 {total_deleted} 条")
         
     except Exception as e:
-        logger.error(f"同步最近更新任务失败: {e}")
-        import traceback
-        traceback.print_exc()
-        TaskManager.update_task(db, task_id, status="failed", error_message=str(e))
+        logger.error(f"同步最近更新任务失败: {get_error_message(e)}")
+        TaskManager.update_task(db, task_id, status="failed", error_message=get_error_message(e))
     finally:
         if db:
             db.close()

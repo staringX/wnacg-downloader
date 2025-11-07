@@ -5,6 +5,22 @@ import sys
 from pathlib import Path
 from loguru import logger
 
+
+def get_error_message(exception: Exception) -> str:
+    """提取异常的错误消息，避免打印完整的堆栈跟踪
+    
+    Args:
+        exception: 异常对象
+        
+    Returns:
+        错误消息的第一行（通常是主要错误信息）
+    """
+    error_str = str(exception)
+    # 如果包含换行符，只取第一行
+    if '\n' in error_str:
+        return error_str.split('\n')[0]
+    return error_str
+
 # 创建日志目录
 LOG_DIR = Path(__file__).parent.parent.parent / "logs"
 LOG_DIR.mkdir(exist_ok=True)
@@ -54,6 +70,6 @@ logger.add(
     filter=lambda record: "crawler" in record["name"].lower()
 )
 
-# 导出配置好的logger
-__all__ = ["logger"]
+# 导出配置好的logger和辅助函数
+__all__ = ["logger", "get_error_message"]
 

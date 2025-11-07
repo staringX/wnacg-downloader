@@ -4,7 +4,7 @@ import re
 from typing import List, Optional, Dict
 from datetime import datetime
 from selenium.webdriver.common.by import By
-from app.utils.logger import logger
+from app.utils.logger import logger, get_error_message
 
 
 class MangaDetailsCrawler:
@@ -47,7 +47,7 @@ class MangaDetailsCrawler:
                 if page_match:
                     page_count = int(page_match.group(1))
             except Exception as e:
-                logger.debug(f"    获取页数失败: {e}")
+                logger.debug(f"    获取页数失败: {get_error_message(e)}")
             
             # 获取上传日期（使用class名称，避免汉字字符串）
             updated_at = None
@@ -62,7 +62,7 @@ class MangaDetailsCrawler:
                         date_str = date_match.group(1)
                         updated_at = datetime.strptime(date_str, '%Y-%m-%d')
             except Exception as e:
-                logger.debug(f"    获取上传日期失败: {e}")
+                logger.debug(f"    获取上传日期失败: {get_error_message(e)}")
             
             # 获取封面图片URL - 取第一张图片的缩略图
             cover_url = None
@@ -72,7 +72,7 @@ class MangaDetailsCrawler:
                 if images:
                     cover_url = images[0].get_attribute('src')
             except Exception as e:
-                logger.debug(f"    获取封面失败: {e}")
+                logger.debug(f"    获取封面失败: {get_error_message(e)}")
             
             return {
                 'title': title,
@@ -82,9 +82,7 @@ class MangaDetailsCrawler:
                 'cover_image_url': cover_url
             }
         except Exception as e:
-            logger.error(f"获取漫画详情失败: {e}")
-            import traceback
-            traceback.print_exc()
+            logger.error(f"获取漫画详情失败: {get_error_message(e)}")
             return None
     
     def get_manga_images(self, manga_url: str) -> List[Dict]:
@@ -181,9 +179,9 @@ class MangaDetailsCrawler:
                                             else:
                                                 logger.debug(f"    '.next > a'链接不符合条件或已访问: {full_url[:80]}")
                         except Exception as e:
-                            logger.debug(f"    未找到'.next > a'链接: {e}")
+                            logger.debug(f"    未找到'.next > a'链接: {get_error_message(e)}")
                 except Exception as e:
-                    logger.debug(f"    查找分页器失败: {e}")
+                    logger.debug(f"    查找分页器失败: {get_error_message(e)}")
                     pass
                 
                 # 如果找不到'.next > a'链接，说明已经到最后一页，遍历完当前页后结束
@@ -244,15 +242,13 @@ class MangaDetailsCrawler:
                         logger.warning(f"    ✗ 未找到原图")
                         
                 except Exception as e:
-                    logger.warning(f"    ✗ 获取失败: {e}")
+                    logger.warning(f"    ✗ 获取失败: {get_error_message(e)}")
                     continue
             
             logger.info(f"\n✓ 成功获取 {len(images)}/{len(view_urls)} 张原图")
             return images
             
         except Exception as e:
-            logger.error(f"获取漫画图片失败: {e}")
-            import traceback
-            traceback.print_exc()
+            logger.error(f"获取漫画图片失败: {get_error_message(e)}")
             return []
 

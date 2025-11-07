@@ -3,7 +3,7 @@ import time
 import os
 from typing import Optional
 from app.config import settings
-from app.utils.logger import logger
+from app.utils.logger import logger, get_error_message
 
 # 可选的Selenium导入
 try:
@@ -70,7 +70,7 @@ class BrowserManager:
                 # 尝试自动检测
                 self.driver = webdriver.Chrome(options=chrome_options)
         except Exception as e:
-            logger.error(f"无法初始化Chrome驱动: {e}")
+            logger.error(f"无法初始化Chrome驱动: {get_error_message(e)}")
             self.driver = None
     
     def get_available_url(self) -> Optional[str]:
@@ -137,7 +137,7 @@ class BrowserManager:
             logger.warning("未找到可用的漫画网站地址")
             return None
         except Exception as e:
-            logger.error(f"获取网站地址失败: {e}")
+            logger.error(f"获取网站地址失败: {get_error_message(e)}")
             return None
     
     def login(self, username: str, password: str) -> bool:
@@ -191,7 +191,7 @@ class BrowserManager:
             logger.warning("登录可能失败，仍在登录页面")
             return False
         except Exception as e:
-            logger.error(f"登录失败: {e}")
+            logger.error(f"登录失败: {get_error_message(e)}")
             return False
     
     def close(self):
