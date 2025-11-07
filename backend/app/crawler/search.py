@@ -190,47 +190,64 @@ class SearchCrawler:
                 if should_stop:
                     break
                 
-                # 查找下一页链接（搜索页面可能使用不同的翻页方式）
+                # 🔥 搜索结果页只有数字分页，通过记录当前页码，查找页码为"当前页+1"的链接
                 next_page_url = None
                 try:
-                    # 方法1：查找 .paginator 中的链接
+                    # 根据MCP确认的结构：分页器有class "paginator"
                     paginator = self.driver.find_element(By.CSS_SELECTOR, ".paginator")
                     if paginator:
-                        page_links = paginator.find_elements(By.CSS_SELECTOR, "a[href*='q=']")
+                        # 获取当前页页码
+                        current_page_num = page_num  # 使用临时变量page_num作为当前页
+                        try:
+                            # 尝试从.thispage元素获取当前页（更准确）
+                            thispage_elem = paginator.find_element(By.CSS_SELECTOR, ".thispage")
+                            if thispage_elem:
+                                current_page_num = int(thispage_elem.text.strip())
+                        except:
+                            # 如果找不到.thispage，使用page_num变量
+                            pass
+                        
+                        # 计算下一页页码
+                        next_page_num = current_page_num + 1
+                        logger.debug(f"    当前页: {current_page_num}, 查找页码为 {next_page_num} 的链接")
+                        
+                        # 在分页器中查找所有链接，找到页码等于"当前页+1"的链接
+                        page_links = paginator.find_elements(By.CSS_SELECTOR, "a")
+                        
                         for link in page_links:
                             href = link.get_attribute('href')
-                            if href and href not in visited_urls and 'q=' in href:
-                                next_page_url = href
-                                break
-                except:
+                            if not href:
+                                continue
+                            
+                            # 处理相对路径
+                            if href.startswith('/'):
+                                full_url = f"{base}{href}"
+                            elif not href.startswith('http'):
+                                full_url = f"{base}/{href}"
+                            else:
+                                full_url = href
+                            
+                            # 从URL中提取页码参数（格式：p=2 或 &p=2）
+                            page_match = re.search(r'[&?]p=(\d+)', full_url)
+                            if page_match:
+                                link_page_num = int(page_match.group(1))
+                                # 找到页码等于"当前页+1"且未访问过的链接
+                                if (link_page_num == next_page_num and 
+                                    full_url not in visited_urls and
+                                    'q=' in full_url):
+                                    next_page_url = full_url
+                                    logger.info(f"    ✓ 找到页码为 {next_page_num} 的链接: {next_page_url[:80]}")
+                                    break
+                except Exception as e:
+                    logger.debug(f"    查找分页器失败: {e}")
                     pass
                 
-                # 方法2：如果没有找到，尝试通过URL参数翻页（添加 p=2, p=3 等）
+                # 如果找不到下一页链接，说明已经到最后一页，遍历完当前页后结束
                 if not next_page_url:
-                    # 检查当前页面是否有更多结果
-                    if len(manga_info_list) > 0:
-                        # 尝试构造下一页URL
-                        parsed = urlparse(current_url)
-                        params = parse_qs(parsed.query)
-                        next_page = page_num + 1
-                        params['p'] = [str(next_page)]
-                        new_query = urlencode(params, doseq=True)
-                        next_page_url = f"{parsed.scheme}://{parsed.netloc}{parsed.path}?{new_query}"
-                        logger.info(f"    尝试构造下一页URL: {next_page_url}")
-                    else:
-                        logger.info(f"    当前页没有找到漫画，停止翻页")
-                        break
-                
-                if not next_page_url:
-                    logger.info(f"    没有找到下一页链接，停止翻页")
+                    logger.info(f"    ⚠️  未找到下一页链接，这是最后一页，停止翻页")
                     break
                 
-                # 确保URL是完整的
-                if next_page_url.startswith('/'):
-                    next_page_url = f"{base}{next_page_url}"
-                elif not next_page_url.startswith('http'):
-                    next_page_url = f"{base}/{next_page_url}"
-                
+                # next_page_url已经在前面处理过，直接使用
                 current_url = next_page_url
                 page_num += 1
                 

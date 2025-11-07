@@ -106,66 +106,56 @@ class CollectionCrawler:
                         # 🔥 第一步：立即查找并缓存下一页链接（在遍历漫画之前）
                         if not next_page_url:  # 如果还没有缓存下一页链接，现在查找
                             logger.debug(f"    查找下一页链接...")
-                            candidate_urls = []
                             
                             try:
-                                # 根据MCP确认的结构：分页器有class "paginator"，包含多个<a>标签
+                                # 根据MCP确认的结构：分页器有class "paginator"
                                 paginator = self.driver.find_element(By.CSS_SELECTOR, ".paginator")
                                 logger.debug(f"    ✓ 找到分页器元素 (class: paginator)")
                                 
-                                if paginator:
-                                    # 查找分页器内的所有<a>标签
-                                    page_links = paginator.find_elements(By.CSS_SELECTOR, "a")
-                                    logger.debug(f"    ✓ 分页器内找到 {len(page_links)} 个链接")
-                                    
-                                    # 立即提取所有链接的href，避免stale element reference
-                                    for idx, link in enumerate(page_links):
-                                        try:
-                                            href = link.get_attribute('href')
-                                            if not href:
-                                                continue
-                                            
-                                            # 处理相对路径，转换为完整URL
-                                            if not self.base_url:
-                                                logger.error("base_url未设置，无法处理下一页链接")
-                                                break
-                                            
-                                            # 处理相对路径（根据MCP确认，href是相对路径如 /users-users_fav-page-2-c-840419.html）
-                                            if href.startswith('/'):
-                                                base = self.base_url.rstrip('/')
-                                                full_url = f"{base}{href}"
-                                            elif not href.startswith('http'):
-                                                base = self.base_url.rstrip('/')
-                                                full_url = f"{base}/{href}"
+                                # 🔥 只使用 ".next > a"（"後頁>"链接）来获取下一页
+                                try:
+                                    next_span = paginator.find_element(By.CSS_SELECTOR, ".next")
+                                    if next_span:
+                                        next_link = next_span.find_element(By.CSS_SELECTOR, "a")
+                                        if next_link:
+                                            href = next_link.get_attribute('href')
+                                            if href:
+                                                # 处理相对路径
+                                                if not self.base_url:
+                                                    logger.error("base_url未设置，无法处理下一页链接")
+                                                else:
+                                                    if href.startswith('/'):
+                                                        base = self.base_url.rstrip('/')
+                                                        full_url = f"{base}{href}"
+                                                    elif not href.startswith('http'):
+                                                        base = self.base_url.rstrip('/')
+                                                        full_url = f"{base}/{href}"
+                                                    else:
+                                                        full_url = href
+                                                    
+                                                    # 验证URL是否符合条件
+                                                    if ('users-users_fav' in full_url and 
+                                                        '-page-' in full_url and 
+                                                        f'c-{category_id}' in full_url and
+                                                        full_url not in visited_urls):
+                                                        next_page_url = full_url
+                                                        logger.info(f"    ✓ 通过'.next > a'找到下一页: {next_page_url[:80]}")
+                                                    else:
+                                                        logger.debug(f"    '.next > a'链接不符合条件或已访问: {full_url[:80]}")
                                             else:
-                                                full_url = href
-                                            
-                                            # 检查URL是否符合条件：包含 users-users_fav、-page- 和当前category_id
-                                            if ('users-users_fav' in full_url and 
-                                                '-page-' in full_url and 
-                                                f'c-{category_id}' in full_url and
-                                                full_url not in visited_urls):
-                                                candidate_urls.append(full_url)
-                                                logger.debug(f"      找到候选链接[{idx}]: {full_url[:70]}")
-                                        except Exception as e:
-                                            logger.debug(f"      处理链接[{idx}]失败: {e}")
-                                            continue
+                                                logger.debug(f"    '.next > a'链接没有href属性")
+                                        else:
+                                            logger.debug(f"    '.next'内未找到<a>标签")
+                                    else:
+                                        logger.debug(f"    未找到'.next'元素")
+                                except Exception as e:
+                                    logger.debug(f"    未找到'.next > a'链接: {e}")
+                                
+                                if not next_page_url:
+                                    logger.info(f"    ⚠️  未找到'.next > a'链接，这是最后一页，遍历完当前页后将结束")
                             except Exception as e:
                                 logger.warning(f"    查找分页器失败: {e}")
                                 pass
-                            
-                            # 从候选中选择最小的未访问页码（按页码顺序排序）
-                            if candidate_urls:
-                                # 提取页码并排序，确保按顺序访问
-                                def extract_page_num(url):
-                                    match = re.search(r'-page-(\d+)-', url)
-                                    return int(match.group(1)) if match else 999
-                                
-                                candidate_urls.sort(key=extract_page_num)
-                                next_page_url = candidate_urls[0]
-                                logger.info(f"    ✓ 已缓存下一页链接: {next_page_url[:80]} (共{len(candidate_urls)}个候选)")
-                            else:
-                                logger.debug(f"    未找到下一页链接")
                         
                         # 🔥 第二步：遍历当前页面的漫画（此时下一页链接已缓存）
                         manga_links = self.driver.find_elements(By.CSS_SELECTOR, "a[href*='photos-index-aid-']")
@@ -247,9 +237,10 @@ class CollectionCrawler:
                             logger.info(f"    第 {page_num} 页没有找到漫画，停止翻页")
                             break
                         
-                        # 🔥 第三步：使用缓存的下一页链接，并立即查找新的下一页链接
+                        # 🔥 第三步：检查是否有下一页链接
+                        # 如果找不到'.next > a'链接，说明已经到最后一页，遍历完当前页后结束，继续下一个作者
                         if not next_page_url:
-                            logger.info(f"    没有找到下一页链接，停止翻页")
+                            logger.info(f"    ✓ 已到最后一页（未找到'.next > a'链接），结束当前作者，继续下一个作者")
                             break
                         
                         # 保存当前缓存的下一页链接
