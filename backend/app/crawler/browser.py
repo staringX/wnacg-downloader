@@ -74,37 +74,67 @@ class BrowserManager:
             self.driver = None
     
     def get_available_url(self) -> Optional[str]:
-        """从发布页获取可用的漫画网站地址"""
+        """从发布页获取可用的漫画网站地址（根据页面布局和元素结构查找）"""
         import requests
         from bs4 import BeautifulSoup
-        import re
         
         try:
             response = requests.get(settings.publish_page_url, timeout=10)
             response.encoding = 'utf-8'
             soup = BeautifulSoup(response.text, 'html.parser')
             
-            # 查找所有链接
-            links = soup.find_all('a', href=True)
             urls = []
             
-            for link in links:
-                href = link.get('href', '')
+            # 根据页面布局查找：在ul列表的li元素中查找target="_blank"的链接
+            # 这些链接通常就是漫画网站地址
+            ul_lists = soup.find_all('ul')
+            
+            for ul in ul_lists:
+                # 查找ul中的所有li元素
+                li_items = ul.find_all('li')
                 
-                # 匹配网站地址模式（www.wn*.ru 或 www.wnacg*.cc等）
-                if re.match(r'https?://www\.wn\d+\.ru', href) or \
-                   re.match(r'https?://www\.wnacg\d+\.cc', href):
-                    urls.append(href)
+                for li in li_items:
+                    # 在每个li中查找target="_blank"的链接（根据页面结构特征）
+                    links = li.find_all('a', {'target': '_blank'}, href=True)
+                    
+                    for link in links:
+                        href = link.get('href', '')
+                        
+                        # 排除发布页本身和chrome浏览器链接（根据URL特征）
+                        if 'wn01.link' in href or 'google.cn' in href:
+                            continue
+                        
+                        # 检查链接内部是否有i标签（页面结构特征）
+                        # 漫画网站链接通常有i标签包裹文本
+                        if link.find('i') and href.startswith('http'):
+                            urls.append(href)
+            
+            # 如果上面的方法没找到，尝试备用方法：查找所有ul中li内的链接
+            if not urls:
+                for ul in ul_lists:
+                    li_items = ul.find_all('li')
+                    for li in li_items:
+                        links = li.find_all('a', href=True)
+                        for link in links:
+                            href = link.get('href', '')
+                            # 排除发布页和chrome链接
+                            if 'wn01.link' in href or 'google.cn' in href:
+                                continue
+                            # 检查是否是http/https链接
+                            if href.startswith('http'):
+                                urls.append(href)
             
             # 尝试连接每个URL，返回第一个可用的
             for url in urls:
                 try:
                     test_response = requests.get(f"{url}/", timeout=5)
                     if test_response.status_code == 200:
+                        logger.info(f"找到可用的漫画网站地址: {url}")
                         return url
                 except:
                     continue
             
+            logger.warning("未找到可用的漫画网站地址")
             return None
         except Exception as e:
             logger.error(f"获取网站地址失败: {e}")
