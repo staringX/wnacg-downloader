@@ -17,7 +17,7 @@ logger.add(
     sys.stdout,
     colorize=True,
     format="<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan> - <level>{message}</level>",
-    level="INFO"
+    level="DEBUG"  # 临时改为DEBUG以便调试分页问题
 )
 
 # 添加详细日志文件（包含所有级别）

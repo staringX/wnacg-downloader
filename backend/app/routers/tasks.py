@@ -58,6 +58,21 @@ def get_latest_task(task_type: str, db: Session = Depends(get_db)):
     return TaskResponse.model_validate(task)
 
 
+@router.post("/tasks/cleanup")
+def cleanup_stale_tasks(db: Session = Depends(get_db)):
+    """手动清理过期的任务（用于调试或手动触发）"""
+    try:
+        cleaned_count = TaskManager.cleanup_stale_tasks(db, cleanup_all_on_startup=True)
+        return {
+            "success": True,
+            "message": f"已清理 {cleaned_count} 个中断的任务",
+            "cleaned_count": cleaned_count
+        }
+    except Exception as e:
+        logger.error(f"清理任务失败: {e}")
+        raise HTTPException(status_code=500, detail=f"清理任务失败: {str(e)}")
+
+
 @router.get("/events")
 async def stream_events():
     """

@@ -186,4 +186,64 @@ class TaskManager:
         return db.query(Task).filter(
             Task.task_type == task_type
         ).order_by(Task.created_at.desc()).first()
+    
+    @staticmethod
+    def cleanup_stale_tasks(db: Session, timeout_minutes: int = 60, cleanup_all_on_startup: bool = False):
+        """
+        清理过期的任务（长时间没有更新的运行中任务）
+        通常在应用启动时调用，用于清理因Docker重启等原因中断的任务
+        
+        Args:
+            db: 数据库会话
+            timeout_minutes: 超时时间（分钟），默认60分钟
+            cleanup_all_on_startup: 如果为True，清理所有pending/running任务（用于Docker重启场景）
+        """
+        from datetime import timedelta
+        
+        if cleanup_all_on_startup:
+            # 启动时清理所有pending/running任务（因为重启后这些任务肯定都中断了）
+            stale_tasks = db.query(Task).filter(
+                Task.status.in_(["pending", "running"])
+            ).all()
+            logger.info(f"启动清理模式：查找所有pending/running状态的任务")
+        else:
+            timeout_threshold = datetime.now() - timedelta(minutes=timeout_minutes)
+            # 查找所有状态为pending或running，但更新时间超过阈值的任务
+            stale_tasks = db.query(Task).filter(
+                Task.status.in_(["pending", "running"]),
+                Task.updated_at < timeout_threshold
+            ).all()
+        
+        if stale_tasks:
+            logger.info(f"发现 {len(stale_tasks)} 个过期任务，正在清理...")
+            
+            for task in stale_tasks:
+                old_status = task.status
+                task.status = "failed"
+                task.error_message = f"任务因系统重启或超时（超过{timeout_minutes}分钟未更新）而中断"
+                task.completed_at = datetime.now()
+                task.updated_at = datetime.now()
+                
+                logger.warning(
+                    f"清理过期任务: {task.id} ({task.task_type}), "
+                    f"原状态: {old_status}, 创建时间: {task.created_at}, "
+                    f"最后更新: {task.updated_at}"
+                )
+            
+            db.commit()
+            
+            # 广播任务更新事件
+            for task in stale_tasks:
+                sse_manager.broadcast_sync("task_updated", {
+                    "task_id": task.id,
+                    "task_type": task.task_type,
+                    "status": "failed",
+                    "error_message": task.error_message
+                })
+            
+            logger.info(f"已清理 {len(stale_tasks)} 个过期任务")
+        else:
+            logger.debug("未发现过期任务")
+        
+        return len(stale_tasks)
 
