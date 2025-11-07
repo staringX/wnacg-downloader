@@ -9,11 +9,12 @@ interface AppTabsProps {
   collectionContent: ReactNode
   updatesContent: ReactNode
   onTabChange?: (value: string) => void
+  value?: string
 }
 
-export function AppTabs({ collectionContent, updatesContent, onTabChange }: AppTabsProps) {
+export function AppTabs({ collectionContent, updatesContent, onTabChange, value }: AppTabsProps) {
   return (
-    <Tabs defaultValue="collection" className="w-full" onValueChange={onTabChange}>
+    <Tabs value={value} defaultValue="collection" className="w-full" onValueChange={onTabChange}>
       <TabsList className="mb-6 glass">
         <TabsTrigger value="collection" className="gap-2">
           <Library className="w-4 h-4" />

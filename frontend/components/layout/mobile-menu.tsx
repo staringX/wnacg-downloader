@@ -17,8 +17,9 @@ import {
   CheckCircle2,
   X,
   Download,
+  Users,
+  RefreshCw,
 } from "lucide-react"
-import { SyncButton } from "@/components/common/sync-button"
 
 interface MobileMenuProps {
   showPreview: boolean
@@ -27,9 +28,14 @@ interface MobileMenuProps {
   onToggleSelectionMode: () => void
   selectedCount: number
   onBatchDelete: () => void
-  pendingMangas: number
-  onDownloadAllPending: () => void
-  onSyncComplete: () => void
+  pendingCount: number
+  onDownloadAll: () => void
+  onSync: () => void
+  isSyncing: boolean
+  syncProgressText: string
+  currentTab: "collection" | "updates"
+  groupByAuthor: boolean
+  onGroupByAuthorChange: (value: boolean) => void
 }
 
 export function MobileMenu({
@@ -39,9 +45,14 @@ export function MobileMenu({
   onToggleSelectionMode,
   selectedCount,
   onBatchDelete,
-  pendingMangas,
-  onDownloadAllPending,
-  onSyncComplete,
+  pendingCount,
+  onDownloadAll,
+  onSync,
+  isSyncing,
+  syncProgressText,
+  currentTab,
+  groupByAuthor,
+  onGroupByAuthorChange,
 }: MobileMenuProps) {
   return (
     <Sheet>
@@ -73,6 +84,21 @@ export function MobileMenu({
             />
           </div>
 
+          {/* 按作者分类切换 */}
+          <div className="flex items-center justify-between glass-card px-4 py-3 rounded-lg">
+            <div className="flex items-center gap-3">
+              <Users className="w-5 h-5 text-muted-foreground" />
+              <Label htmlFor="mobile-group-by-author-toggle" className="text-base cursor-pointer">
+                按作者分类
+              </Label>
+            </div>
+            <Switch
+              id="mobile-group-by-author-toggle"
+              checked={groupByAuthor}
+              onCheckedChange={onGroupByAuthorChange}
+            />
+          </div>
+
           {/* 多选模式 */}
           <Button
             onClick={onToggleSelectionMode}
@@ -94,19 +120,31 @@ export function MobileMenu({
             </Button>
           )}
 
-          {/* 同步收藏夹 */}
-          <div className="w-full [&>button]:w-full [&>button]:justify-start [&>button]:h-12 [&>button]:text-base">
-            <SyncButton onSyncComplete={onSyncComplete} />
-          </div>
+          {/* 统一的同步按钮 */}
+          <Button
+            onClick={onSync}
+            disabled={isSyncing}
+            variant="outline"
+            className="w-full justify-start h-12 text-base glass-card hover:shadow-lg transition-all bg-transparent"
+          >
+            <RefreshCw className={`w-5 h-5 mr-3 ${isSyncing ? "animate-spin" : ""}`} />
+            {isSyncing
+              ? `同步中...${syncProgressText}`
+              : currentTab === "collection"
+              ? "同步收藏夹"
+              : "同步最近更新"}
+          </Button>
 
-          {/* 下载全部待下载 */}
-          {!selectionMode && pendingMangas > 0 && (
+          {/* 统一的全部下载按钮 */}
+          {!selectionMode && pendingCount > 0 && (
             <Button
-              onClick={onDownloadAllPending}
+              onClick={onDownloadAll}
               className="w-full justify-start h-12 text-base bg-primary text-primary-foreground hover:bg-primary/90"
             >
               <Download className="w-5 h-5 mr-3" />
-              下载全部待下载 ({pendingMangas})
+              {currentTab === "collection"
+                ? `下载全部待下载 (${pendingCount})`
+                : `下载全部新更新 (${pendingCount})`}
             </Button>
           )}
         </div>
