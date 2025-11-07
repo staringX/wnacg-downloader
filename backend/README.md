@@ -152,15 +152,15 @@ backend/
 
 ### 环境变量
 
-| 变量名 | 说明 | 默认值 |
-|--------|------|--------|
-| `DATABASE_URL` | PostgreSQL数据库连接字符串 | `postgresql://manga_user:manga_pass@db:5432/manga_db` |
-| `MANGA_USERNAME` | 漫画网站用户名 | `lilifan456` |
-| `MANGA_PASSWORD` | 漫画网站密码 | `a2658208` |
-| `PUBLISH_PAGE_URL` | 发布页地址 | `https://wn01.link` |
-| `DOWNLOAD_DIR` | 下载目录 | `/app/downloads` |
-| `COVER_DIR` | 封面目录 | `/app/covers` |
-| `CORS_ORIGINS` | CORS允许的来源（JSON数组） | `["http://localhost:3000"]` |
+| 变量名 | 说明 | 是否必填 | 示例 |
+|--------|------|---------|------|
+| `DATABASE_URL` | PostgreSQL数据库连接字符串 | 是 | `postgresql://manga_user:manga_pass@db:5432/manga_db` |
+| `MANGA_USERNAME` | 漫画网站用户名 | 是 | `your_username` |
+| `MANGA_PASSWORD` | 漫画网站密码 | 是 | `your_password` |
+| `PUBLISH_PAGE_URL` | 发布页地址 | 否 | `https://wn01.link` |
+| `DOWNLOAD_DIR` | 下载目录 | 否 | `/app/downloads` |
+| `COVER_DIR` | 封面目录 | 否 | `/app/covers` |
+| `CORS_ORIGINS` | CORS允许的来源（JSON数组） | 否 | `["http://localhost:3000"]` |
 
 ### 数据库
 

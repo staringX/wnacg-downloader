@@ -8,9 +8,9 @@ class Settings(BaseSettings):
     # 数据库配置 - PostgreSQL
     database_url: str = "postgresql://manga_user:manga_pass@db:5432/manga_db"
     
-    # 漫画网站账号
-    manga_username: str = "lilifan456"
-    manga_password: str = "a2658208"
+    # 漫画网站账号（必须通过环境变量配置）
+    manga_username: str = ""
+    manga_password: str = ""
     
     # 发布页地址
     publish_page_url: str = "https://wn01.link"
@@ -54,6 +54,20 @@ class Settings(BaseSettings):
     class Config:
         env_file = ".env"
         case_sensitive = False
+    
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        # 验证必填字段
+        if not self.manga_username:
+            raise ValueError(
+                "MANGA_USERNAME 环境变量未设置。请创建 .env 文件并设置 MANGA_USERNAME。"
+                "可以参考 .env.example 文件。"
+            )
+        if not self.manga_password:
+            raise ValueError(
+                "MANGA_PASSWORD 环境变量未设置。请创建 .env 文件并设置 MANGA_PASSWORD。"
+                "可以参考 .env.example 文件。"
+            )
 
 
 settings = Settings()

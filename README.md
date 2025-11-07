@@ -71,8 +71,14 @@ git clone <repository-url>
 cd manga
 ```
 
-2. **配置环境变量**（可选）
-创建 `.env` 文件或使用默认值：
+2. **配置环境变量**（必填）
+复制 `.env.example` 为 `.env` 并填写实际值：
+```bash
+cp .env.example .env
+# 编辑 .env 文件，填写 MANGA_USERNAME 和 MANGA_PASSWORD
+```
+
+`.env` 文件示例：
 ```env
 MANGA_USERNAME=your_username
 MANGA_PASSWORD=your_password
@@ -83,7 +89,9 @@ CORS_ORIGINS=["http://localhost:3000"]
 EXCLUDED_CATEGORIES=["优秀","全部","管理分類","書架","书架","我的書架","一般","真人","同人"]
 ```
 
-**环境变量说明：**
+**重要提示：**
+- `.env` 文件已添加到 `.gitignore`，不会被提交到Git仓库
+- `MANGA_USERNAME` 和 `MANGA_PASSWORD` 是必填项，必须通过环境变量配置
 - `EXCLUDED_CATEGORIES`: 在搜索最近更新时排除的分类或作者名。支持两种格式：
   - JSON数组格式：`["优秀","全部","一般","真人","同人"]`
   - 逗号分隔格式：`优秀,全部,一般,真人,同人`
@@ -110,7 +118,11 @@ pip install -r requirements.txt
 
 2. **配置环境变量**
 ```bash
-# 确保PostgreSQL正在运行
+# 方式1：使用 .env 文件（推荐）
+cp .env.example .env
+# 编辑 .env 文件，填写实际值
+
+# 方式2：直接设置环境变量
 export DATABASE_URL=postgresql://manga_user:manga_pass@localhost:5432/manga_db
 export MANGA_USERNAME=your_username
 export MANGA_PASSWORD=your_password
@@ -138,15 +150,15 @@ pnpm dev
 
 ### 环境变量
 
-| 变量名 | 说明 | 默认值 |
-|--------|------|--------|
-| `DATABASE_URL` | PostgreSQL数据库连接字符串 | `postgresql://manga_user:manga_pass@db:5432/manga_db` |
-| `MANGA_USERNAME` | 漫画网站用户名 | `lilifan456` |
-| `MANGA_PASSWORD` | 漫画网站密码 | `a2658208` |
-| `PUBLISH_PAGE_URL` | 发布页地址 | `https://wn01.link` |
-| `DOWNLOAD_DIR` | 下载目录 | `/app/downloads` |
-| `COVER_DIR` | 封面目录 | `/app/covers` |
-| `CORS_ORIGINS` | CORS允许的来源（JSON数组） | `["http://localhost:3000"]` |
+| 变量名 | 说明 | 是否必填 | 示例 |
+|--------|------|---------|------|
+| `DATABASE_URL` | PostgreSQL数据库连接字符串 | 是 | `postgresql://manga_user:manga_pass@db:5432/manga_db` |
+| `MANGA_USERNAME` | 漫画网站用户名 | 是 | `your_username` |
+| `MANGA_PASSWORD` | 漫画网站密码 | 是 | `your_password` |
+| `PUBLISH_PAGE_URL` | 发布页地址 | 否 | `https://wn01.link` |
+| `DOWNLOAD_DIR` | 下载目录 | 否 | `/app/downloads` |
+| `COVER_DIR` | 封面目录 | 否 | `/app/covers` |
+| `CORS_ORIGINS` | CORS允许的来源（JSON数组） | 否 | `["http://localhost:3000"]` |
 
 ### 数据库
 
