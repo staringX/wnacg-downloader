@@ -1,15 +1,16 @@
 """同步相关路由"""
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlalchemy.orm import Session
 from pathlib import Path
 from pydantic import BaseModel
 from typing import List
 from app.database import get_db
 from app.models import Manga
-from app.schemas import SyncResponse
+from app.schemas import SyncResponse, TaskCreateResponse
 from app.crawler.base import MangaCrawler
 from app.config import settings
 from app.utils.logger import logger
+from app.services.task_manager import TaskManager
 
 router = APIRouter(prefix="/api", tags=["sync"])
 
@@ -132,110 +133,151 @@ def verify_files(db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=f"文件验证失败: {str(e)}")
 
 
-@router.post("/sync", response_model=SyncResponse)
-def sync_collection(db: Session = Depends(get_db)):
-    """同步收藏夹"""
-    try:
-        from selenium.webdriver.common.by import By
-        SELENIUM_AVAILABLE = True
-    except ImportError:
-        SELENIUM_AVAILABLE = False
+def _execute_sync_task(task_id: str, db: Session):
+    """执行同步任务（后台任务）"""
+    from app.database import SessionLocal
     
-    if not SELENIUM_AVAILABLE:
-        raise HTTPException(status_code=503, detail="Selenium未安装，无法使用爬虫功能")
-    
-    # 🔍 第一步：验证本地文件完整性
-    try:
-        verified_count, fixed_count, missing_files = verify_local_files(db)
-    except Exception as e:
-        logger.warning(f"文件验证失败: {e}")
-        # 验证失败不影响同步，继续执行
-    
-    crawler = MangaCrawler()
+    # 创建新的数据库会话（因为这是后台任务）
+    if not db:
+        db = SessionLocal()
     
     try:
-        # 登录
-        if not crawler.login(settings.manga_username, settings.manga_password):
-            raise HTTPException(status_code=401, detail="登录失败")
+        # 检查是否有正在运行的同步任务
+        running_tasks = TaskManager.get_running_tasks(db, "sync")
+        if running_tasks and running_tasks[0].id != task_id:
+            TaskManager.update_task(db, task_id, status="failed", error_message="已有同步任务正在运行")
+            return
         
-        # 🚀 使用生成器：边爬取边保存，真正的实时同步！
-        logger.info("=" * 60)
-        logger.info("开始实时同步（生成器模式）")
-        logger.info("提示：每爬取到一个漫画就会立即保存，刷新页面即可看到最新数据")
-        logger.info("=" * 60)
+        TaskManager.update_task(db, task_id, status="running", message="开始同步收藏夹...")
         
-        added_count = 0
-        updated_count = 0
-        processed_count = 0
+        try:
+            from selenium.webdriver.common.by import By
+            SELENIUM_AVAILABLE = True
+        except ImportError:
+            SELENIUM_AVAILABLE = False
         
-        # 生成器：每yield一个漫画，立即处理并保存
-        for item in crawler.get_collection_stream():
-            processed_count += 1
+        if not SELENIUM_AVAILABLE:
+            TaskManager.update_task(db, task_id, status="failed", error_message="Selenium未安装，无法使用爬虫功能")
+            return
+        
+        # 🔍 第一步：验证本地文件完整性
+        try:
+            verified_count, fixed_count, missing_files = verify_local_files(db)
+            TaskManager.update_task(db, task_id, message=f"文件验证完成：{verified_count}个完整，{fixed_count}个需要修复")
+        except Exception as e:
+            logger.warning(f"文件验证失败: {e}")
+        
+        crawler = MangaCrawler()
+        
+        try:
+            # 登录
+            if not crawler.login(settings.manga_username, settings.manga_password):
+                TaskManager.update_task(db, task_id, status="failed", error_message="登录失败")
+                return
             
-            try:
-                # 检查是否已存在
-                existing = db.query(Manga).filter(Manga.manga_url == item['manga_url']).first()
+            TaskManager.update_task(db, task_id, message="登录成功，开始爬取收藏夹...")
+            
+            added_count = 0
+            updated_count = 0
+            processed_count = 0
+            
+            # 生成器：每yield一个漫画，立即处理并保存
+            for item in crawler.get_collection_stream():
+                processed_count += 1
                 
-                if existing:
-                    # 已存在，仅更新基本信息（如果需要）
-                    if item.get('page_count') and not existing.page_count:
-                        existing.page_count = item['page_count']
-                        db.commit()
-                    updated_count += 1
-                    logger.info(f"[{processed_count}] ⟳ 已存在: {item['title'][:50]}")
-                else:
-                    # 新漫画，创建记录并立即保存
-                    logger.info(f"[{processed_count}] ✚ 新增: {item['title'][:50]}")
+                try:
+                    # 检查是否已存在
+                    existing = db.query(Manga).filter(Manga.manga_url == item['manga_url']).first()
                     
-                    manga = Manga(
-                        title=item['title'],
-                        author=item['author'],
-                        manga_url=item['manga_url'],
-                        page_count=item.get('page_count')
-                    )
-                    db.add(manga)
-                    db.commit()  # 🔥 立即提交！用户刷新页面就能看到
-                    db.refresh(manga)  # 刷新对象以获取ID
-                    
-                    added_count += 1
-                    
-                    # 立即获取详细信息（页数、更新日期、封面）
-                    try:
-                        details = crawler.get_manga_details(manga.manga_url)
+                    if existing:
+                        # 已存在，仅更新基本信息（如果需要）
+                        if item.get('page_count') and not existing.page_count:
+                            existing.page_count = item['page_count']
+                            db.commit()
+                        updated_count += 1
+                        logger.info(f"[{processed_count}] ⟳ 已存在: {item['title'][:50]}")
+                    else:
+                        # 新漫画，创建记录并立即保存
+                        logger.info(f"[{processed_count}] ✚ 新增: {item['title'][:50]}")
                         
-                        if details:
-                            # 更新详细信息
-                            if details.get('page_count'):
-                                manga.page_count = details['page_count']
-                            if details.get('updated_at'):
-                                manga.updated_at = details['updated_at']
-                            if details.get('cover_image_url'):
-                                manga.cover_image_url = details['cover_image_url']
-                            db.commit()  # 🔥 再次提交详情！
-                            logger.debug(f"     ✓ 详情: 页数={manga.page_count}, 更新={str(manga.updated_at)[:10] if manga.updated_at else 'N/A'}")
-                        else:
-                            logger.warning(f"     ⚠ 无法获取详细信息: {manga.title[:30]}")
-                            
-                    except Exception as detail_error:
-                        logger.warning(f"     ⚠ 获取详情失败: {detail_error}")
-                        # 详情获取失败不影响基本记录的保存，继续处理下一个
+                        manga = Manga(
+                            title=item['title'],
+                            author=item['author'],
+                            manga_url=item['manga_url'],
+                            page_count=item.get('page_count')
+                        )
+                        db.add(manga)
+                        db.commit()
+                        db.refresh(manga)
+                        
+                        added_count += 1
+                        
+                        # 立即获取详细信息
+                        try:
+                            details = crawler.get_manga_details(manga.manga_url)
+                            if details:
+                                if details.get('page_count'):
+                                    manga.page_count = details['page_count']
+                                if details.get('updated_at'):
+                                    manga.updated_at = details['updated_at']
+                                if details.get('cover_image_url'):
+                                    manga.cover_image_url = details['cover_image_url']
+                                db.commit()
+                        except Exception as detail_error:
+                            logger.warning(f"     ⚠ 获取详情失败: {detail_error}")
                     
-            except Exception as e:
-                logger.error(f"[{processed_count}] ✗ 处理失败: {item.get('title', 'Unknown')[:50]} - {e}")
-                db.rollback()  # 回滚当前失败的事务
-                continue
-        
-        logger.info(f"同步完成：新增 {added_count} 个，更新 {updated_count} 个")
-        
-        return SyncResponse(
-            success=True,
-            message=f"同步完成：新增 {added_count} 个，更新 {updated_count} 个",
-            added_count=added_count,
-            updated_count=updated_count
-        )
-    except Exception as e:
-        db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+                    # 更新任务进度
+                    progress = int((processed_count / max(processed_count, 1)) * 90)  # 90%用于爬取，10%用于完成
+                    TaskManager.update_task(
+                        db, task_id,
+                        progress=progress,
+                        completed_items=processed_count,
+                        message=f"已处理 {processed_count} 个漫画（新增 {added_count}，更新 {updated_count}）"
+                    )
+                    
+                except Exception as e:
+                    logger.error(f"[{processed_count}] ✗ 处理失败: {item.get('title', 'Unknown')[:50]} - {e}")
+                    db.rollback()
+                    continue
+            
+            # 任务完成
+            TaskManager.update_task(
+                db, task_id,
+                status="completed",
+                progress=100,
+                message=f"同步完成：新增 {added_count} 个，更新 {updated_count} 个",
+                result_data=f'{{"added_count": {added_count}, "updated_count": {updated_count}}}'
+            )
+            
+            logger.info(f"同步任务完成：新增 {added_count} 个，更新 {updated_count} 个")
+            
+        except Exception as e:
+            logger.error(f"同步任务失败: {e}")
+            TaskManager.update_task(db, task_id, status="failed", error_message=str(e))
+        finally:
+            crawler.close()
     finally:
-        crawler.close()
+        if db:
+            db.close()
+
+
+@router.post("/sync", response_model=TaskCreateResponse)
+def sync_collection(background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+    """同步收藏夹（异步任务模式）"""
+    # 检查是否有正在运行的同步任务
+    running_tasks = TaskManager.get_running_tasks(db, "sync")
+    if running_tasks:
+        raise HTTPException(status_code=409, detail=f"已有同步任务正在运行: {running_tasks[0].id}")
+    
+    # 创建任务
+    task = TaskManager.create_task(db, task_type="sync")
+    
+    # 在后台执行同步任务
+    background_tasks.add_task(_execute_sync_task, task.id, db)
+    
+    return TaskCreateResponse(
+        success=True,
+        task_id=task.id,
+        message="同步任务已创建，正在后台执行"
+    )
 

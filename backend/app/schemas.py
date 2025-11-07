@@ -95,3 +95,31 @@ class BatchDownloadResponse(BaseModel):
     total: int
     success_count: int
     failed_count: int
+
+
+class TaskResponse(BaseModel):
+    """任务状态响应"""
+    id: str
+    task_type: str
+    status: str  # pending, running, completed, failed
+    progress: int
+    total_items: Optional[int] = None
+    completed_items: int
+    message: Optional[str] = None
+    error_message: Optional[str] = None
+    manga_id: Optional[str] = None
+    manga_ids: Optional[str] = None
+    result_data: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+    completed_at: Optional[datetime] = None
+    
+    class Config:
+        from_attributes = True
+
+
+class TaskCreateResponse(BaseModel):
+    """创建任务响应"""
+    success: bool
+    task_id: str
+    message: str

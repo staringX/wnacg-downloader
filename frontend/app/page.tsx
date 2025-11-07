@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { AuthorSection } from "@/components/author-section"
 import { RecentUpdates } from "@/components/recent-updates"
 import { SyncButton } from "@/components/sync-button"
@@ -13,16 +13,34 @@ import { useToast } from "@/hooks/use-toast"
 import type { AuthorGroup, MangaItem } from "@/lib/types"
 import { api } from "@/lib/api"
 import { mockAllMangas } from "@/lib/mock-data"
+import { useRunningTasks } from "@/hooks/use-task-status"
 
 export default function HomePage() {
   const [authorGroups, setAuthorGroups] = useState<AuthorGroup[]>([])
   const [downloadingIds, setDownloadingIds] = useState<Set<string>>(new Set())
+  const [taskIds, setTaskIds] = useState<Map<string, string>>(new Map()) // manga_id -> task_id
   const [isLoading, setIsLoading] = useState(true)
   const [showPreview, setShowPreview] = useState(false)
   const [selectionMode, setSelectionMode] = useState(false)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [recentUpdatesKey, setRecentUpdatesKey] = useState(0) // 用于强制重新渲染RecentUpdates组件
   const { toast } = useToast()
+  
+  // 获取正在运行的下载任务
+  const { tasks: runningDownloadTasks } = useRunningTasks("download")
+  
+  // 根据运行中的任务更新downloadingIds
+  useEffect(() => {
+    const downloadingSet = new Set<string>()
+    runningDownloadTasks.forEach((task) => {
+      if (task.manga_id && (task.status === "running" || task.status === "pending")) {
+        downloadingSet.add(task.manga_id)
+        // 保存任务ID映射
+        setTaskIds((prev) => new Map(prev).set(task.manga_id!, task.id))
+      }
+    })
+    setDownloadingIds(downloadingSet)
+  }, [runningDownloadTasks])
 
   const loadMangas = async () => {
     setIsLoading(true)
@@ -72,23 +90,40 @@ export default function HomePage() {
   }, [])
 
   const handleDownload = async (manga: MangaItem) => {
-    setDownloadingIds((prev) => new Set(prev).add(manga.id))
+    // 检查是否已有正在运行的下载任务
+    if (downloadingIds.has(manga.id)) {
+      toast({
+        title: "下载进行中",
+        description: "该漫画正在下载中，请等待完成",
+        variant: "default",
+      })
+      return
+    }
 
     try {
       const response = await api.downloadManga(manga.id)
 
-      if (response.success) {
-        toast({
-          title: "下载成功",
-          description: manga.title,
-        })
-
-        setAuthorGroups((prev) =>
-          prev.map((ag) => ({
-            ...ag,
-            mangas: ag.mangas.map((m) => (m.id === manga.id ? { ...m, downloaded_at: new Date().toISOString() } : m)),
-          })),
-        )
+      if (response.success && response.data) {
+        const taskId = response.data.task_id
+        if (taskId) {
+          // 保存任务ID映射
+          setTaskIds((prev) => new Map(prev).set(manga.id, taskId))
+          // 添加到下载中列表
+          setDownloadingIds((prev) => new Set(prev).add(manga.id))
+          
+          toast({
+            title: "下载已开始",
+            description: `开始下载: ${manga.title}`,
+          })
+        } else {
+          // 如果返回空taskId，说明已经下载完成
+          toast({
+            title: "下载完成",
+            description: manga.title + " 已下载",
+          })
+          // 刷新数据
+          loadMangas()
+        }
       } else {
         throw new Error(response.error || "下载失败")
       }
@@ -99,14 +134,40 @@ export default function HomePage() {
         description: error instanceof Error ? error.message : "请稍后重试",
         variant: "destructive",
       })
-    } finally {
-      setDownloadingIds((prev) => {
-        const next = new Set(prev)
-        next.delete(manga.id)
-        return next
-      })
     }
   }
+  
+  // 监听下载任务完成
+  useEffect(() => {
+    runningDownloadTasks.forEach((task) => {
+      if (task.status === "completed" && task.manga_id) {
+        // 从下载中列表移除
+        setDownloadingIds((prev) => {
+          const next = new Set(prev)
+          next.delete(task.manga_id!)
+          return next
+        })
+        // 刷新数据
+        loadMangas()
+        toast({
+          title: "下载完成",
+          description: task.message || "下载成功",
+        })
+      } else if (task.status === "failed" && task.manga_id) {
+        // 从下载中列表移除
+        setDownloadingIds((prev) => {
+          const next = new Set(prev)
+          next.delete(task.manga_id!)
+          return next
+        })
+        toast({
+          title: "下载失败",
+          description: task.error_message || "下载过程中出现错误",
+          variant: "destructive",
+        })
+      }
+    })
+  }, [runningDownloadTasks, toast])
 
   const handleDownloadAll = async (mangas: MangaItem[]) => {
     const ids = mangas.map((m) => m.id)

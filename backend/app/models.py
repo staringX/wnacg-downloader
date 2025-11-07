@@ -55,3 +55,28 @@ class RecentUpdate(Base):
     
     created_at = Column(DateTime, server_default=func.now())
     updated_at_db = Column(DateTime, server_default=func.now(), onupdate=func.now())
+
+
+class Task(Base):
+    """任务状态表 - 存储同步和下载任务的状态"""
+    __tablename__ = "tasks"
+
+    id = Column(String, primary_key=True, default=generate_id)
+    task_type = Column(String, nullable=False, index=True)  # sync, download, batch_download
+    status = Column(String, nullable=False, index=True)  # pending, running, completed, failed
+    progress = Column(Integer, default=0)  # 进度百分比 0-100
+    total_items = Column(Integer, nullable=True)  # 总项目数
+    completed_items = Column(Integer, default=0)  # 已完成项目数
+    message = Column(String, nullable=True)  # 状态消息
+    error_message = Column(String, nullable=True)  # 错误消息
+    
+    # 任务关联的漫画ID（用于download和batch_download）
+    manga_id = Column(String, nullable=True, index=True)
+    manga_ids = Column(String, nullable=True)  # JSON格式的ID列表（用于batch_download）
+    
+    # 任务结果数据（JSON格式）
+    result_data = Column(String, nullable=True)  # JSON格式的结果数据
+    
+    created_at = Column(DateTime, server_default=func.now())
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+    completed_at = Column(DateTime, nullable=True)  # 完成时间

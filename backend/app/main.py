@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
-from app.routers import manga, sync, download, recent_updates
+from app.routers import manga, sync, download, recent_updates, tasks
 from app.database import Base, engine
 from app.utils.logger import logger
 from app import models  # 🔥 必须导入models，否则Base.metadata找不到表
@@ -31,6 +31,7 @@ app.include_router(manga.router)
 app.include_router(sync.router)
 app.include_router(download.router)
 app.include_router(recent_updates.router)
+app.include_router(tasks.router)
 
 
 @app.get("/")

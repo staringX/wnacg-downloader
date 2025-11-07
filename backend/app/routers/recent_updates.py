@@ -1,14 +1,15 @@
 """最近更新相关路由"""
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlalchemy.orm import Session
 from typing import List
 from datetime import datetime
 from app.database import get_db
 from app.models import Manga, RecentUpdate
-from app.schemas import MangaResponse, SyncResponse
+from app.schemas import MangaResponse, SyncResponse, TaskCreateResponse
 from app.crawler.base import MangaCrawler
 from app.config import settings
 from app.utils.logger import logger
+from app.services.task_manager import TaskManager
 
 router = APIRouter(prefix="/api", tags=["recent-updates"])
 
@@ -20,21 +21,22 @@ def get_recent_updates(db: Session = Depends(get_db)):
     return [MangaResponse.from_orm(update) for update in recent_updates]
 
 
-@router.post("/sync-recent-updates", response_model=SyncResponse)
-def sync_recent_updates(db: Session = Depends(get_db)):
-    """
-    同步最近更新
-    1. 获取所有已收藏的作者
-    2. 对每个作者，找到收藏夹中最新的漫画的更新时间
-    3. 搜索该作者，获取晚于该时间的所有漫画
-    4. 保存新更新到RecentUpdate表
-    5. 删除早于该时间的记录（仅从RecentUpdate表删除）
-    """
-    logger.info("=" * 60)
-    logger.info("开始同步最近更新...")
-    logger.info("=" * 60)
+def _execute_sync_recent_updates_task(task_id: str, db: Session):
+    """执行同步最近更新任务（后台任务）"""
+    from app.database import SessionLocal
+    
+    if not db:
+        db = SessionLocal()
     
     try:
+        # 检查是否有正在运行的同步最近更新任务
+        running_tasks = TaskManager.get_running_tasks(db, "sync_recent_updates")
+        if running_tasks and running_tasks[0].id != task_id:
+            TaskManager.update_task(db, task_id, status="failed", error_message="已有同步最近更新任务正在运行")
+            return
+        
+        TaskManager.update_task(db, task_id, status="running", message="开始同步最近更新...")
+        
         # 获取所有已收藏的作者
         authors = db.query(Manga.author).distinct().all()
         author_list = [a[0] for a in authors]
@@ -44,10 +46,11 @@ def sync_recent_updates(db: Session = Depends(get_db)):
         author_list = [author for author in author_list if author not in excluded_categories]
         
         if not author_list:
-            logger.warning("没有找到已收藏的作者（已排除自定义分类）")
-            return SyncResponse(success=True, message="没有找到已收藏的作者（已排除自定义分类）", added_count=0, updated_count=0)
+            TaskManager.update_task(db, task_id, status="completed", message="没有找到已收藏的作者（已排除自定义分类）", progress=100)
+            return
         
-        logger.info(f"找到 {len(author_list)} 个已收藏的作者（已排除自定义分类）")
+        total_authors = len(author_list)
+        TaskManager.update_task(db, task_id, total_items=total_authors, message=f"找到 {total_authors} 个已收藏的作者，开始搜索更新...")
         
         # 获取每个作者收藏夹中最新的漫画的更新日期
         author_latest_dates = {}
@@ -58,26 +61,31 @@ def sync_recent_updates(db: Session = Depends(get_db)):
             
             if latest_manga and latest_manga.updated_at:
                 author_latest_dates[author] = latest_manga.updated_at
-                logger.info(f"  作者 {author} 最新漫画更新时间: {latest_manga.updated_at}")
             else:
-                # 如果没有更新时间，使用一个很早的日期
                 author_latest_dates[author] = datetime(2000, 1, 1)
-                logger.warning(f"  作者 {author} 没有更新时间，使用默认日期: 2000-01-01")
         
         # 初始化爬虫
         crawler = MangaCrawler()
         if not crawler.login(settings.manga_username, settings.manga_password):
-            logger.error("登录失败")
-            return SyncResponse(success=False, message="登录失败", added_count=0, updated_count=0)
+            TaskManager.update_task(db, task_id, status="failed", error_message="登录失败")
+            return
         
         total_added = 0
         total_deleted = 0
+        processed_authors = 0
         
         # 对每个作者进行搜索和更新
-        for author in author_list:
+        for idx, author in enumerate(author_list, 1):
             try:
                 since_date = author_latest_dates.get(author, datetime(2000, 1, 1))
                 logger.info(f"搜索作者: {author}, 截止日期: {since_date}")
+                
+                TaskManager.update_task(
+                    db, task_id,
+                    completed_items=idx - 1,
+                    progress=int((idx - 1) / total_authors * 90),
+                    message=f"正在搜索作者 {author} ({idx}/{total_authors})..."
+                )
                 
                 # 搜索作者并获取更新
                 new_mangas = crawler.search_author_updates(author, since_date)
@@ -129,6 +137,8 @@ def sync_recent_updates(db: Session = Depends(get_db)):
                     total_deleted += deleted_count
                     logger.info(f"  作者 {author} 删除了 {deleted_count} 条旧记录")
                 
+                processed_authors += 1
+                
             except Exception as e:
                 logger.error(f"处理作者 {author} 时出错: {e}")
                 import traceback
@@ -138,17 +148,52 @@ def sync_recent_updates(db: Session = Depends(get_db)):
         
         crawler.close()
         
-        logger.info(f"同步完成: 新增/更新 {total_added} 条，删除 {total_deleted} 条")
-        return SyncResponse(
-            success=True,
+        # 任务完成
+        TaskManager.update_task(
+            db, task_id,
+            status="completed",
+            progress=100,
+            completed_items=total_authors,
             message=f"同步完成: 新增/更新 {total_added} 条，删除 {total_deleted} 条",
-            added_count=total_added,
-            updated_count=total_deleted
+            result_data=f'{{"added_count": {total_added}, "deleted_count": {total_deleted}}}'
         )
         
+        logger.info(f"同步最近更新任务完成: 新增/更新 {total_added} 条，删除 {total_deleted} 条")
+        
     except Exception as e:
-        logger.error(f"同步最近更新失败: {e}")
+        logger.error(f"同步最近更新任务失败: {e}")
         import traceback
         traceback.print_exc()
-        return SyncResponse(success=False, message=f"同步失败: {str(e)}", added_count=0, updated_count=0)
+        TaskManager.update_task(db, task_id, status="failed", error_message=str(e))
+    finally:
+        if db:
+            db.close()
+
+
+@router.post("/sync-recent-updates", response_model=TaskCreateResponse)
+def sync_recent_updates(background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+    """
+    同步最近更新（异步任务模式）
+    1. 获取所有已收藏的作者
+    2. 对每个作者，找到收藏夹中最新的漫画的更新时间
+    3. 搜索该作者，获取晚于该时间的所有漫画
+    4. 保存新更新到RecentUpdate表
+    5. 删除早于该时间的记录（仅从RecentUpdate表删除）
+    """
+    # 检查是否有正在运行的同步最近更新任务
+    running_tasks = TaskManager.get_running_tasks(db, "sync_recent_updates")
+    if running_tasks:
+        raise HTTPException(status_code=409, detail=f"已有同步最近更新任务正在运行: {running_tasks[0].id}")
+    
+    # 创建任务
+    task = TaskManager.create_task(db, task_type="sync_recent_updates")
+    
+    # 在后台执行同步任务
+    background_tasks.add_task(_execute_sync_recent_updates_task, task.id, db)
+    
+    return TaskCreateResponse(
+        success=True,
+        task_id=task.id,
+        message="同步最近更新任务已创建，正在后台执行"
+    )
 

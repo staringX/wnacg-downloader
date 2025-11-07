@@ -13,7 +13,11 @@ class MangaDetailsCrawler:
     def __init__(self, browser_manager):
         self.browser = browser_manager
         self.driver = browser_manager.driver
-        self.base_url = browser_manager.base_url
+    
+    @property
+    def base_url(self):
+        """动态获取base_url，确保获取到最新值"""
+        return self.browser.base_url
     
     def get_manga_details(self, manga_url: str) -> Optional[Dict]:
         """获取漫画详情（页数、更新日期、封面等）"""
@@ -174,6 +178,9 @@ class MangaDetailsCrawler:
                     break
                 
                 # 确保URL是完整的（处理相对路径）
+                if not self.base_url:
+                    logger.error("base_url未设置，无法处理下一页链接")
+                    break
                 if next_page_url.startswith('/'):
                     base = self.base_url.rstrip('/')
                     next_page_url = f"{base}{next_page_url}"

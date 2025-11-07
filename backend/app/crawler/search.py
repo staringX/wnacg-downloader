@@ -14,7 +14,11 @@ class SearchCrawler:
     def __init__(self, browser_manager):
         self.browser = browser_manager
         self.driver = browser_manager.driver
-        self.base_url = browser_manager.base_url
+    
+    @property
+    def base_url(self):
+        """动态获取base_url，确保获取到最新值"""
+        return self.browser.base_url
     
     def search_author_updates(self, author_name: str, since_date: datetime) -> List[Dict]:
         """
@@ -29,6 +33,11 @@ class SearchCrawler:
         """
         if not self.driver:
             logger.error("浏览器驱动未初始化")
+            return []
+        
+        # 确保base_url已设置
+        if not self.base_url:
+            logger.error("base_url未设置，无法搜索作者更新")
             return []
         
         try:

@@ -12,7 +12,11 @@ class CollectionCrawler:
     def __init__(self, browser_manager):
         self.browser = browser_manager
         self.driver = browser_manager.driver
-        self.base_url = browser_manager.base_url
+    
+    @property
+    def base_url(self):
+        """动态获取base_url，确保获取到最新值"""
+        return self.browser.base_url
     
     def get_collection_stream(self) -> Generator[Dict, None, None]:
         """
@@ -23,6 +27,11 @@ class CollectionCrawler:
             dict: 漫画信息字典 {'title', 'author', 'manga_url', 'page_count'}
         """
         if not self.driver:
+            return
+        
+        # 确保base_url已设置
+        if not self.base_url:
+            logger.error("base_url未设置，无法获取收藏夹")
             return
         
         try:
@@ -213,6 +222,9 @@ class CollectionCrawler:
                         if candidate_urls:
                             next_page_url = candidate_urls[0]
                             # 🔥 确保URL是完整的（处理相对路径）
+                            if not self.base_url:
+                                logger.error("base_url未设置，无法处理下一页链接")
+                                break
                             if next_page_url.startswith('/'):
                                 base = self.base_url.rstrip('/')
                                 next_page_url = f"{base}{next_page_url}"

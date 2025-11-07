@@ -11,6 +11,7 @@ import { useToast } from "@/hooks/use-toast"
 import type { RecentUpdate, AuthorGroup, MangaItem } from "@/lib/types"
 import { api } from "@/lib/api"
 import { mockRecentUpdates } from "@/lib/mock-data"
+import { useTaskStatus, useRunningTasks } from "@/hooks/use-task-status"
 
 interface RecentUpdatesProps {
   onDownload: (manga: RecentUpdate) => void
@@ -26,32 +27,77 @@ export function RecentUpdates({ onDownload, onDelete, downloadingIds, showPrevie
   const [groupByAuthor, setGroupByAuthor] = useState(false)
   const { toast } = useToast()
 
+  // 加载最近更新的函数
+  const loadUpdates = async () => {
+    setIsLoading(true)
+    try {
+      const response = await api.fetchRecentUpdates()
+      if (response.success && response.data) {
+        setUpdates(response.data)
+      } else {
+        // 如果获取失败，使用mock数据
+        setUpdates(mockRecentUpdates)
+      }
+    } catch (error) {
+      console.error("Load recent updates error:", error)
+      setUpdates(mockRecentUpdates)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
   // 组件加载时或refreshTrigger变化时自动获取最近更新
   useEffect(() => {
-    const loadUpdates = async () => {
-      setIsLoading(true)
-      try {
-        const response = await api.fetchRecentUpdates()
-        if (response.success && response.data) {
-          setUpdates(response.data)
-        } else {
-          // 如果获取失败，使用mock数据
-          setUpdates(mockRecentUpdates)
-        }
-      } catch (error) {
-        console.error("Load recent updates error:", error)
-        setUpdates(mockRecentUpdates)
-      } finally {
-        setIsLoading(false)
-      }
-    }
     loadUpdates()
   }, [refreshTrigger]) // 当refreshTrigger变化时，重新获取数据
 
+  const [currentTaskId, setCurrentTaskId] = useState<string | null>(null)
+  const { task } = useTaskStatus(currentTaskId)
+  const { tasks: runningTasks } = useRunningTasks("sync_recent_updates")
+
+  // 检查是否有正在运行的同步最近更新任务
+  useEffect(() => {
+    if (runningTasks.length > 0 && !currentTaskId) {
+      setCurrentTaskId(runningTasks[0].id)
+    }
+  }, [runningTasks, currentTaskId])
+
+  // 监听任务状态变化
+  useEffect(() => {
+    if (!task) return
+
+    if (task.status === "completed") {
+      toast({
+        title: "同步完成",
+        description: task.message || "已同步最近更新",
+      })
+      // 刷新数据
+      loadUpdates()
+      setCurrentTaskId(null)
+    } else if (task.status === "failed") {
+      toast({
+        title: "同步失败",
+        description: task.error_message || "同步过程中出现错误",
+        variant: "destructive",
+      })
+      setCurrentTaskId(null)
+    }
+  }, [task, toast, loadUpdates])
+
   const handleRefresh = async () => {
+    // 如果已有正在运行的任务，不允许重复创建
+    if (runningTasks.length > 0) {
+      toast({
+        title: "同步进行中",
+        description: "已有同步任务正在运行，请等待完成",
+        variant: "default",
+      })
+      return
+    }
+
     setIsLoading(true)
     try {
-      // 先同步最近更新
+      // 先同步最近更新（创建任务）
       const syncResponse = await api.syncRecentUpdates()
       if (!syncResponse.success) {
         toast({
@@ -59,27 +105,16 @@ export function RecentUpdates({ onDownload, onDelete, downloadingIds, showPrevie
           description: syncResponse.error || "同步最近更新失败",
           variant: "destructive",
         })
-        // 即使同步失败，也尝试获取已有数据
-      } else {
-        toast({
-          title: "同步成功",
-          description: syncResponse.data?.message || "正在获取更新...",
-        })
+        setIsLoading(false)
+        return
       }
-      
-      // 然后获取更新后的数据
-      const response = await api.fetchRecentUpdates()
-      if (response.success && response.data) {
-        setUpdates(response.data)
+
+      if (syncResponse.data) {
+        const taskId = syncResponse.data.task_id
+        setCurrentTaskId(taskId)
         toast({
-          title: "更新成功",
-          description: `获取到 ${response.data.length} 个最近更新`,
-        })
-      } else {
-        toast({
-          title: "获取失败",
-          description: "无法获取最近更新数据",
-          variant: "destructive",
+          title: "同步已开始",
+          description: "同步任务已创建，正在后台执行...",
         })
       }
     } catch (error) {
