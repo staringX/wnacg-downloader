@@ -1,7 +1,7 @@
 """下载相关路由"""
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlalchemy.orm import Session
-from typing import List
+from typing import List, Optional
 from datetime import datetime
 from pydantic import BaseModel
 from app.database import get_db
@@ -12,12 +12,60 @@ from app.utils.downloader import MangaDownloader
 from app.config import settings
 from app.utils.logger import logger
 from app.services.task_manager import TaskManager
+from app.services.download_queue import download_queue_manager
 
 router = APIRouter(prefix="/api", tags=["download"])
 
 
 class BatchDownloadRequest(BaseModel):
     manga_ids: List[str]
+
+
+def _download_executor(db: Session):
+    """下载执行器 - 从队列中取出任务执行（单例模式）"""
+    from app.database import SessionLocal
+    
+    if not db:
+        db = SessionLocal()
+    
+    try:
+        # 检查执行器是否已经在运行
+        if download_queue_manager.is_executing():
+            logger.debug("下载执行器已在运行，跳过")
+            return
+        
+        # 循环处理队列中的任务
+        while True:
+            # 获取队列中的下一个任务
+            next_task = download_queue_manager.get_next_task(db)
+            
+            if not next_task:
+                # 队列为空，退出
+                logger.info("下载队列为空，执行器退出")
+                break
+            
+            # 尝试启动执行
+            if not download_queue_manager.start_execution(next_task.id):
+                # 执行器已被其他线程启动，退出
+                logger.debug("执行器已被其他线程启动，退出")
+                break
+            
+            try:
+                # 执行下载任务
+                _execute_download_task(next_task.id, next_task.manga_id, db)
+            finally:
+                # 释放执行器锁
+                download_queue_manager.finish_execution(next_task.id)
+                
+                # 短暂休眠，避免CPU占用过高
+                import time
+                time.sleep(0.5)
+    
+    except Exception as e:
+        logger.error(f"下载执行器错误: {e}")
+    finally:
+        if db:
+            db.close()
 
 
 def _execute_download_task(task_id: str, manga_id: str, db: Session):
@@ -28,6 +76,9 @@ def _execute_download_task(task_id: str, manga_id: str, db: Session):
         db = SessionLocal()
     
     try:
+        # 更新任务状态为running
+        TaskManager.update_task(db, task_id, status="running", message=f"开始下载...")
+        
         manga = db.query(Manga).filter(Manga.id == manga_id).first()
         if not manga:
             TaskManager.update_task(db, task_id, status="failed", error_message="漫画不存在")
@@ -44,7 +95,7 @@ def _execute_download_task(task_id: str, manga_id: str, db: Session):
             )
             return
         
-        TaskManager.update_task(db, task_id, status="running", message=f"开始下载: {manga.title}")
+        TaskManager.update_task(db, task_id, message=f"开始下载: {manga.title}")
         
         crawler = MangaCrawler()
         downloader = MangaDownloader()
@@ -168,53 +219,57 @@ def _execute_download_task(task_id: str, manga_id: str, db: Session):
 @router.post("/download/{manga_id}", response_model=TaskCreateResponse)
 def download_manga(manga_id: str, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     """
-    下载单个漫画（异步任务模式，支持断点续传）
+    下载单个漫画（队列模式，支持断点续传）
     
     功能：
     - 如果已完全下载，直接返回
-    - 如果下载中断，自动恢复（跳过已下载的页）
+    - 如果不在队列中，加入下载队列
+    - 如果已在队列中或正在下载，返回现有任务ID
     - 边下载边保存，实时更新进度
     - 通过任务ID查询状态
     """
-    manga = db.query(Manga).filter(Manga.id == manga_id).first()
-    if not manga:
-        raise HTTPException(status_code=404, detail="漫画不存在")
+    # 使用下载队列管理器添加任务
+    task = download_queue_manager.add_to_queue(db, manga_id)
     
-    # 检查是否已有正在运行的下载任务
-    running_tasks = TaskManager.get_running_tasks(db, "download")
-    for task in running_tasks:
-        if task.manga_id == manga_id:
-            raise HTTPException(status_code=409, detail=f"该漫画已有下载任务正在运行: {task.id}")
-    
-    # 检查是否已完全下载
-    if manga.download_status == "completed" and manga.is_downloaded:
-        # 返回已完成的任务信息
+    if not task:
+        # 漫画不存在或已下载
+        manga = db.query(Manga).filter(Manga.id == manga_id).first()
+        if not manga:
+            raise HTTPException(status_code=404, detail="漫画不存在")
+        
+        # 已下载
         return TaskCreateResponse(
             success=True,
             task_id="",
             message="漫画已下载"
         )
     
-    # 创建任务
-    task = TaskManager.create_task(db, task_type="download", manga_id=manga_id)
-    
-    # 在后台执行下载任务
-    background_tasks.add_task(_execute_download_task, task.id, manga_id, db)
+    # 如果任务状态是pending，说明是新加入队列的，需要启动执行器
+    if task.status == "pending":
+        # 启动下载执行器（如果还没有运行）
+        background_tasks.add_task(_download_executor, db)
     
     return TaskCreateResponse(
         success=True,
         task_id=task.id,
-        message="下载任务已创建，正在后台执行"
+        message="下载任务已加入队列" if task.status == "pending" else "下载任务正在执行"
     )
+
+
+@router.get("/download/queue", response_model=List[str])
+def get_download_queue(db: Session = Depends(get_db)):
+    """获取下载队列中的漫画ID列表（用于前端显示）"""
+    return download_queue_manager.get_queued_manga_ids(db)
 
 
 @router.post("/download/batch", response_model=BatchDownloadResponse)
 def download_batch(request: BatchDownloadRequest, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     """
-    批量下载漫画（逐个处理，实时保存）
+    批量下载漫画（队列模式）
     
     功能：
-    - 每下载完一本，立即保存数据库
+    - 将所有漫画加入下载队列
+    - 队列按顺序执行
     - 中途中断不影响已下载的漫画
     - 支持断点续传（每本漫画独立）
     """
@@ -226,7 +281,7 @@ def download_batch(request: BatchDownloadRequest, background_tasks: BackgroundTa
     logger.info(f"开始批量下载: {len(request.manga_ids)} 本漫画")
     logger.info(f"{'='*60}\n")
     
-    # 逐个下载，每完成一个立即保存
+    # 将所有漫画加入下载队列
     for idx, manga_id in enumerate(request.manga_ids, 1):
         try:
             manga = db.query(Manga).filter(Manga.id == manga_id).first()
@@ -235,7 +290,7 @@ def download_batch(request: BatchDownloadRequest, background_tasks: BackgroundTa
                 failed_count += 1
                 continue
             
-            logger.info(f"\n[{idx}/{len(request.manga_ids)}] 处理: {manga.title}")
+            logger.info(f"\n[{idx}/{len(request.manga_ids)}] 加入队列: {manga.title}")
             
             # 如果已经下载完成，跳过
             if manga.download_status == "completed" and manga.is_downloaded:
@@ -243,27 +298,30 @@ def download_batch(request: BatchDownloadRequest, background_tasks: BackgroundTa
                 success_count += 1
                 continue
             
-            # 调用单本下载（支持断点续传）
+            # 加入下载队列
             try:
-                result = download_manga(manga_id, background_tasks, db)
-                if result.success:
+                task = download_queue_manager.add_to_queue(db, manga_id)
+                if task:
                     success_count += 1
-                    logger.info(f"  ✅ 成功")
+                    logger.info(f"  ✅ 已加入队列 (任务ID: {task.id})")
                 else:
-                    failed_count += 1
-                    failed_titles.append(manga.title)
-                    logger.error(f"  ❌ 失败")
+                    # 可能已下载或已在队列中
+                    success_count += 1
+                    logger.info(f"  ⏭️  已在队列中或已下载")
             except Exception as e:
                 failed_count += 1
                 failed_titles.append(manga.title)
                 logger.error(f"  ❌ 失败: {str(e)}")
-                # 单本失败不影响其他漫画，继续处理下一本
                 continue
                 
         except Exception as e:
             logger.error(f"[{idx}/{len(request.manga_ids)}] ✗ 处理失败: {e}")
             failed_count += 1
             continue
+    
+    # 启动下载执行器（如果还没有运行）
+    if success_count > 0:
+        background_tasks.add_task(_download_executor, db)
     
     logger.info(f"\n{'='*60}")
     logger.info(f"批量下载完成")

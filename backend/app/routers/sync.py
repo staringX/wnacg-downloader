@@ -11,6 +11,7 @@ from app.crawler.base import MangaCrawler
 from app.config import settings
 from app.utils.logger import logger
 from app.services.task_manager import TaskManager
+from app.services.sync_singleton import sync_singleton
 
 router = APIRouter(prefix="/api", tags=["sync"])
 
@@ -142,9 +143,8 @@ def _execute_sync_task(task_id: str, db: Session):
         db = SessionLocal()
     
     try:
-        # 检查是否有正在运行的同步任务
-        running_tasks = TaskManager.get_running_tasks(db, "sync")
-        if running_tasks and running_tasks[0].id != task_id:
+        # 使用单例管理器检查并启动任务
+        if not sync_singleton.start_task(task_id):
             TaskManager.update_task(db, task_id, status="failed", error_message="已有同步任务正在运行")
             return
         
@@ -266,6 +266,8 @@ def _execute_sync_task(task_id: str, db: Session):
             TaskManager.update_task(db, task_id, status="failed", error_message=str(e))
         finally:
             crawler.close()
+            # 释放单例锁
+            sync_singleton.finish_task(task_id)
     finally:
         if db:
             db.close()
@@ -273,11 +275,11 @@ def _execute_sync_task(task_id: str, db: Session):
 
 @router.post("/sync", response_model=TaskCreateResponse)
 def sync_collection(background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
-    """同步收藏夹（异步任务模式）"""
-    # 检查是否有正在运行的同步任务
-    running_tasks = TaskManager.get_running_tasks(db, "sync")
-    if running_tasks:
-        raise HTTPException(status_code=409, detail=f"已有同步任务正在运行: {running_tasks[0].id}")
+    """同步收藏夹（异步任务模式，单例模式）"""
+    # 使用单例管理器检查是否有正在运行的任务
+    if sync_singleton.is_running():
+        running_task_id = sync_singleton.get_running_task_id()
+        raise HTTPException(status_code=409, detail=f"已有同步任务正在运行: {running_task_id}")
     
     # 创建任务
     task = TaskManager.create_task(db, task_type="sync")

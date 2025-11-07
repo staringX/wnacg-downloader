@@ -52,7 +52,7 @@ export function RecentUpdates({ onDownload, onDelete, downloadingIds, showPrevie
   }, [refreshTrigger]) // 当refreshTrigger变化时，重新获取数据
 
   const [currentTaskId, setCurrentTaskId] = useState<string | null>(null)
-  const { task } = useTaskStatus(currentTaskId)
+  const { task, isLoading: isTaskLoading } = useTaskStatus(currentTaskId)
   const { tasks: runningTasks } = useRunningTasks("sync_recent_updates")
 
   // 检查是否有正在运行的同步最近更新任务
@@ -84,9 +84,12 @@ export function RecentUpdates({ onDownload, onDelete, downloadingIds, showPrevie
     }
   }, [task, toast, loadUpdates])
 
+  const isSyncing = task?.status === "running" || task?.status === "pending" || isTaskLoading
+  const hasRunningTask = runningTasks.length > 0
+
   const handleRefresh = async () => {
     // 如果已有正在运行的任务，不允许重复创建
-    if (runningTasks.length > 0) {
+    if (hasRunningTask) {
       toast({
         title: "同步进行中",
         description: "已有同步任务正在运行，请等待完成",
@@ -95,7 +98,6 @@ export function RecentUpdates({ onDownload, onDelete, downloadingIds, showPrevie
       return
     }
 
-    setIsLoading(true)
     try {
       // 先同步最近更新（创建任务）
       const syncResponse = await api.syncRecentUpdates()
@@ -105,7 +107,6 @@ export function RecentUpdates({ onDownload, onDelete, downloadingIds, showPrevie
           description: syncResponse.error || "同步最近更新失败",
           variant: "destructive",
         })
-        setIsLoading(false)
         return
       }
 
@@ -124,10 +125,15 @@ export function RecentUpdates({ onDownload, onDelete, downloadingIds, showPrevie
         description: error instanceof Error ? error.message : "未知错误",
         variant: "destructive",
       })
-    } finally {
-      setIsLoading(false)
     }
   }
+
+  // 显示进度信息
+  const progressText = task?.progress
+    ? ` (${task.progress}%)`
+    : task?.message
+    ? ` - ${task.message}`
+    : ""
 
   const pendingUpdates = updates.filter((u) => !u.is_downloaded)
 
@@ -163,12 +169,31 @@ export function RecentUpdates({ onDownload, onDelete, downloadingIds, showPrevie
 
   if (updates.length === 0) {
     return (
-      <div className="glass rounded-lg p-6">
-        <div className="flex items-center gap-2 mb-4">
-          <Sparkles className="w-5 h-5 text-primary" />
-          <h2 className="text-2xl font-bold">收藏作者最近更新</h2>
+      <div className="glass rounded-lg overflow-hidden">
+        <div className="glass-muted p-6 bg-gradient-to-r from-primary/10 via-primary/5 to-transparent">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Sparkles className="w-5 h-5 text-primary" />
+              <h2 className="text-2xl font-bold">收藏作者最近更新</h2>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <Button
+                onClick={handleRefresh}
+                variant="outline"
+                size="sm"
+                className="glass-card hover:shadow-lg transition-all bg-transparent"
+                disabled={isSyncing || hasRunningTask}
+              >
+                <RefreshCw className={`w-4 h-4 mr-2 ${isSyncing ? "animate-spin" : ""}`} />
+                {isSyncing ? `同步中...${progressText}` : "同步最近更新"}
+              </Button>
+            </div>
+          </div>
         </div>
-        <p className="text-muted-foreground text-center py-8">暂无收藏作者的更新</p>
+        <div className="p-6">
+          <p className="text-muted-foreground text-center py-8">暂无收藏作者的更新</p>
+        </div>
       </div>
     )
   }
@@ -202,11 +227,11 @@ export function RecentUpdates({ onDownload, onDelete, downloadingIds, showPrevie
               onClick={handleRefresh}
               variant="outline"
               size="sm"
-              className="glass-card bg-transparent"
-              disabled={isLoading}
+              className="glass-card hover:shadow-lg transition-all bg-transparent"
+              disabled={isSyncing || hasRunningTask}
             >
-              <RefreshCw className={`w-4 h-4 mr-2 ${isLoading ? "animate-spin" : ""}`} />
-              {isLoading ? "更新中..." : "刷新更新"}
+              <RefreshCw className={`w-4 h-4 mr-2 ${isSyncing ? "animate-spin" : ""}`} />
+              {isSyncing ? `同步中...${progressText}` : "同步最近更新"}
             </Button>
 
             {!groupByAuthor && pendingUpdates.length > 0 && (

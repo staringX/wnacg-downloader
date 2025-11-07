@@ -10,6 +10,7 @@ from app.crawler.base import MangaCrawler
 from app.config import settings
 from app.utils.logger import logger, get_error_message
 from app.services.task_manager import TaskManager
+from app.services.recent_updates_singleton import recent_updates_singleton
 
 router = APIRouter(prefix="/api", tags=["recent-updates"])
 
@@ -29,9 +30,8 @@ def _execute_sync_recent_updates_task(task_id: str, db: Session):
         db = SessionLocal()
     
     try:
-        # 检查是否有正在运行的同步最近更新任务
-        running_tasks = TaskManager.get_running_tasks(db, "sync_recent_updates")
-        if running_tasks and running_tasks[0].id != task_id:
+        # 使用单例管理器检查并启动任务
+        if not recent_updates_singleton.start_task(task_id):
             TaskManager.update_task(db, task_id, status="failed", error_message="已有同步最近更新任务正在运行")
             return
         
@@ -41,8 +41,8 @@ def _execute_sync_recent_updates_task(task_id: str, db: Session):
         authors = db.query(Manga.author).distinct().all()
         author_list = [a[0] for a in authors]
         
-        # 排除用户自定义的分类（如"优秀"），只保留真正的作者名
-        excluded_categories = ["优秀", "全部", "管理分類", "書架", "书架", "我的書架"]
+        # 排除用户自定义的分类（从配置中读取）
+        excluded_categories = settings.excluded_categories
         author_list = [author for author in author_list if author not in excluded_categories]
         
         if not author_list:
@@ -171,6 +171,8 @@ def _execute_sync_recent_updates_task(task_id: str, db: Session):
         logger.error(f"同步最近更新任务失败: {get_error_message(e)}")
         TaskManager.update_task(db, task_id, status="failed", error_message=get_error_message(e))
     finally:
+        # 释放单例锁
+        recent_updates_singleton.finish_task(task_id)
         if db:
             db.close()
 
@@ -178,17 +180,17 @@ def _execute_sync_recent_updates_task(task_id: str, db: Session):
 @router.post("/sync-recent-updates", response_model=TaskCreateResponse)
 def sync_recent_updates(background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     """
-    同步最近更新（异步任务模式）
+    同步最近更新（异步任务模式，单例模式）
     1. 获取所有已收藏的作者
     2. 对每个作者，找到收藏夹中最新的漫画的更新时间
     3. 搜索该作者，获取晚于该时间的所有漫画
     4. 保存新更新到RecentUpdate表
     5. 删除早于该时间的记录（仅从RecentUpdate表删除）
     """
-    # 检查是否有正在运行的同步最近更新任务
-    running_tasks = TaskManager.get_running_tasks(db, "sync_recent_updates")
-    if running_tasks:
-        raise HTTPException(status_code=409, detail=f"已有同步最近更新任务正在运行: {running_tasks[0].id}")
+    # 使用单例管理器检查是否有正在运行的任务
+    if recent_updates_singleton.is_running():
+        running_task_id = recent_updates_singleton.get_running_task_id()
+        raise HTTPException(status_code=409, detail=f"已有同步最近更新任务正在运行: {running_task_id}")
     
     # 创建任务
     task = TaskManager.create_task(db, task_type="sync_recent_updates")

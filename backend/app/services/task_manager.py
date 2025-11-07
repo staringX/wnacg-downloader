@@ -123,6 +123,7 @@ class TaskManager:
         task_id: str,
         status: Optional[str] = None,
         progress: Optional[int] = None,
+        total_items: Optional[int] = None,
         completed_items: Optional[int] = None,
         message: Optional[str] = None,
         error_message: Optional[str] = None,
@@ -137,6 +138,8 @@ class TaskManager:
             task.status = status
         if progress is not None:
             task.progress = progress
+        if total_items is not None:
+            task.total_items = total_items
         if completed_items is not None:
             task.completed_items = completed_items
         if message:

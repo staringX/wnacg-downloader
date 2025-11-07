@@ -1,5 +1,7 @@
 from pydantic_settings import BaseSettings
 from typing import List
+import json
+from pydantic import field_validator
 
 
 class Settings(BaseSettings):
@@ -23,6 +25,31 @@ class Settings(BaseSettings):
     api_host: str = "0.0.0.0"
     api_port: int = 8000
     cors_origins: List[str] = ["http://localhost:3000"]
+    
+    # 最近更新搜索时排除的分类/作者名（环境变量可以是JSON数组或逗号分隔的字符串）
+    excluded_categories: List[str] = [
+        "优秀", "全部", "管理分類", "書架", "书架", "我的書架",
+        "一般", "真人", "同人"
+    ]
+    
+    @field_validator('excluded_categories', mode='before')
+    @classmethod
+    def parse_excluded_categories(cls, v):
+        """解析排除分类配置（支持JSON数组或逗号分隔的字符串）"""
+        if isinstance(v, str):
+            # 尝试解析为JSON数组
+            try:
+                parsed = json.loads(v)
+                if isinstance(parsed, list):
+                    return parsed
+            except json.JSONDecodeError:
+                pass
+            # 尝试解析为逗号分隔的字符串
+            if ',' in v:
+                return [item.strip() for item in v.split(',') if item.strip()]
+            # 单个字符串
+            return [v.strip()] if v.strip() else []
+        return v
     
     class Config:
         env_file = ".env"
