@@ -1,24 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback, useRef } from "react"
-import { api } from "@/lib/api"
-
-export interface TaskStatus {
-  id: string
-  task_type: string
-  status: "pending" | "running" | "completed" | "failed"
-  progress: number
-  total_items?: number
-  completed_items: number
-  message?: string
-  error_message?: string
-  manga_id?: string
-  manga_ids?: string
-  result_data?: string
-  created_at: string
-  updated_at: string
-  completed_at?: string
-}
+import type { TaskStatus } from "@/lib/types"
 
 export function useTaskStatus(taskId: string | null) {
   const [task, setTask] = useState<TaskStatus | null>(null)

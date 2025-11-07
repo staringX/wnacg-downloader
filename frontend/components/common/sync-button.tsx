@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { RefreshCw } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
-import { api } from "@/lib/api"
+import { syncApi } from "@/lib/api"
 import { useTaskStatus, useRunningTasks } from "@/hooks/use-task-status"
 
 interface SyncButtonProps {
@@ -61,7 +61,7 @@ export function SyncButton({ onSyncComplete }: SyncButtonProps) {
     }
 
     try {
-      const response = await api.syncCollection()
+      const response = await syncApi.syncCollection()
 
       if (response.success && response.data) {
         const taskId = response.data.task_id
