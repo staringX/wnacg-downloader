@@ -140,8 +140,12 @@ backend/
 ### 服务模块 (services/)
 
 - **task_manager.py**: 任务管理器，管理任务状态和SSE推送
-- **singleton_manager.py**: 单例管理器，管理同步任务的单例执行
+- **sync_singleton.py**: 同步收藏夹单例管理器
+- **recent_updates_singleton.py**: 最近更新单例管理器
 - **download_queue.py**: 下载队列管理器，管理下载任务的队列执行
+- **sync_service.py**: 同步收藏夹业务逻辑
+- **recent_updates_service.py**: 最近更新业务逻辑
+- **download_service.py**: 下载业务逻辑
 
 ### 工具模块 (utils/)
 
@@ -160,7 +164,7 @@ backend/
 | `PUBLISH_PAGE_URL` | 发布页地址 | 否 | `https://wn01.link` |
 | `DOWNLOAD_DIR` | 下载目录 | 否 | `/app/downloads` |
 | `COVER_DIR` | 封面目录 | 否 | `/app/covers` |
-| `CORS_ORIGINS` | CORS允许的来源（JSON数组） | 否 | `["http://localhost:3000"]` |
+| `EXCLUDED_CATEGORIES` | 最近更新搜索时排除的分类（逗号分隔或JSON数组） | 否 | `优秀,一般,真人,同人` |
 
 ### 数据库
 

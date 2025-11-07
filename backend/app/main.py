@@ -65,10 +65,10 @@ async def startup_event():
     """启动事件（备用方案）"""
     cleanup_tasks_on_startup()
 
-# CORS配置
+# CORS配置 - 允许所有来源
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.cors_origins,
+    allow_origins=["*"],  # 允许所有来源
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

@@ -28,7 +28,7 @@ services:
       - wnacg-network
 
   backend:
-    image: staringx/wnacg-downloader-backend:latest
+    image: staringx/wnacg-downloader-backend:latest-amd64
     container_name: wnacg-downloader-backend
     environment:
       # 使用PostgreSQL数据库
@@ -40,7 +40,6 @@ services:
       COVER_DIR: /app/covers
       API_HOST: 0.0.0.0
       API_PORT: 8000
-      CORS_ORIGINS: ${CORS_ORIGINS:-'["http://localhost:3000"]'}
       # 最近更新搜索时排除的分类/作者名（JSON数组格式或逗号分隔）
       EXCLUDED_CATEGORIES: ${EXCLUDED_CATEGORIES:-["优秀","全部","管理分類","書架","书架","我的書架","一般","真人","同人"]}
     volumes:
@@ -60,13 +59,10 @@ services:
       - wnacg-network
 
   frontend:
-    image: staringx/wnacg-downloader-frontend:latest
+    image: staringx/wnacg-downloader-frontend:latest-amd64
     container_name: wnacg-downloader-frontend
     ports:
       - "${FRONTEND_PORT:-3000}:3000"
-    environment:
-      # 使用NAS的IP地址或容器名（根据实际情况修改）
-      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
     depends_on:
       - backend
     restart: unless-stopped

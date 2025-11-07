@@ -24,7 +24,6 @@ class Settings(BaseSettings):
     # API配置
     api_host: str = "0.0.0.0"
     api_port: int = 8000
-    cors_origins: List[str] = ["http://localhost:3000"]
     
     # 最近更新搜索时排除的分类/作者名（环境变量可以是JSON数组或逗号分隔的字符串）
     excluded_categories: List[str] = [

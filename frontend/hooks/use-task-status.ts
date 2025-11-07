@@ -3,6 +3,8 @@
 import { useState, useEffect, useCallback, useRef } from "react"
 import type { TaskStatus } from "@/lib/types"
 
+const API_BASE_URL = ""
+
 export function useTaskStatus(taskId: string | null) {
   const [task, setTask] = useState<TaskStatus | null>(null)
   const [isLoading, setIsLoading] = useState(false)
@@ -18,7 +20,7 @@ export function useTaskStatus(taskId: string | null) {
 
     setIsLoading(true)
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/tasks/${taskId}`)
+      const response = await fetch(`${API_BASE_URL}/api/tasks/${taskId}`)
       if (response.ok) {
         const data = await response.json()
         setTask(data)
@@ -45,9 +47,7 @@ export function useTaskStatus(taskId: string | null) {
     }
 
     // 创建EventSource连接
-    const eventSource = new EventSource(
-      `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/events`
-    )
+    const eventSource = new EventSource(`${API_BASE_URL}/api/events`)
     eventSourceRef.current = eventSource
 
     // 监听任务创建事件
@@ -133,9 +133,9 @@ export function useRunningTasks(taskType?: string) {
   const fetchRunningTasks = useCallback(async () => {
     setIsLoading(true)
     try {
-      const url = taskType
-        ? `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/tasks/running/list?task_type=${taskType}`
-        : `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/tasks/running/list`
+        const url = taskType
+          ? `${API_BASE_URL}/api/tasks/running/list?task_type=${taskType}`
+          : `${API_BASE_URL}/api/tasks/running/list`
       
       const response = await fetch(url)
       if (response.ok) {
@@ -157,9 +157,7 @@ export function useRunningTasks(taskType?: string) {
   // 建立SSE连接监听任务状态更新（通过SSE更新任务列表，而不是轮询）
   useEffect(() => {
     // 创建EventSource连接
-    const eventSource = new EventSource(
-      `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/events`
-    )
+    const eventSource = new EventSource(`${API_BASE_URL}/api/events`)
     eventSourceRef.current = eventSource
 
     // 监听任务更新事件，更新任务列表
