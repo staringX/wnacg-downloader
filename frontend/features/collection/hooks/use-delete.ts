@@ -11,7 +11,7 @@ export function useDelete() {
   const handleDelete = async (
     manga: MangaItem,
     authorGroups: AuthorGroup[],
-    setAuthorGroups: (groups: AuthorGroup[]) => void
+    setAuthorGroups: (groups: AuthorGroup[] | ((prev: AuthorGroup[]) => AuthorGroup[])) => void
   ) => {
     try {
       const response = await mangaApi.deleteManga(manga.id)
@@ -24,7 +24,7 @@ export function useDelete() {
 
         // Remove manga from state
         setAuthorGroups(
-          prev =>
+          (prev: AuthorGroup[]) =>
             prev
               .map(ag => ({
                 ...ag,
@@ -48,7 +48,7 @@ export function useDelete() {
   const handleBatchDelete = async (
     selectedIds: Set<string>,
     authorGroups: AuthorGroup[],
-    setAuthorGroups: (groups: AuthorGroup[]) => void,
+    setAuthorGroups: (groups: AuthorGroup[] | ((prev: AuthorGroup[]) => AuthorGroup[])) => void,
     clearSelection: () => void
   ) => {
     if (selectedIds.size === 0) {
@@ -69,7 +69,7 @@ export function useDelete() {
         })
 
         setAuthorGroups(
-          prev =>
+          (prev: AuthorGroup[]) =>
             prev
               .map(ag => ({
                 ...ag,

@@ -151,6 +151,13 @@
     @apply bg-background text-foreground;
   }
 
+  /* 移动端字体大小调整 */
+  @media (max-width: 1023px) {
+    html {
+      font-size: 14px; /* 默认16px，移动端调整为14px */
+    }
+  }
+
   body::before {
     content: "";
     position: fixed;
