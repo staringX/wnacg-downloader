@@ -200,15 +200,25 @@ def _execute_sync_task(task_id: str, db: Session):
                         # 新漫画，创建记录并立即保存
                         logger.info(f"[{processed_count}] ✚ 新增: {item['title'][:50]}")
                         
-                        manga = Manga(
-                            title=item['title'],
-                            author=item['author'],
-                            manga_url=item['manga_url'],
-                            page_count=item.get('page_count')
-                        )
-                        db.add(manga)
-                        db.commit()
-                        db.refresh(manga)
+                        try:
+                            manga = Manga(
+                                title=item['title'],
+                                author=item['author'],
+                                manga_url=item['manga_url'],
+                                page_count=item.get('page_count')
+                            )
+                            db.add(manga)
+                            db.commit()
+                            db.refresh(manga)
+                        except Exception as e:
+                            # 处理可能的唯一约束冲突（并发情况下可能发生）
+                            db.rollback()
+                            if 'unique' in str(e).lower() or 'duplicate' in str(e).lower():
+                                logger.warning(f"[{processed_count}] ⚠️  并发冲突，跳过: {item['title'][:50]}")
+                                updated_count += 1
+                                continue
+                            else:
+                                raise
                         
                         added_count += 1
                         

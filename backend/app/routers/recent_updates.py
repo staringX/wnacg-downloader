@@ -112,17 +112,26 @@ def _execute_sync_recent_updates_task(task_id: str, db: Session):
                         total_added += 1
                     else:
                         # 创建新记录
-                        new_update = RecentUpdate(
-                            title=manga_data['title'],
-                            author=manga_data['author'],
-                            manga_url=manga_data['manga_url'],
-                            updated_at=manga_data['updated_at'],
-                            page_count=manga_data.get('page_count'),
-                            cover_image_url=manga_data.get('cover_image_url'),
-                            is_downloaded=False
-                        )
-                        db.add(new_update)
-                        total_added += 1
+                        try:
+                            new_update = RecentUpdate(
+                                title=manga_data['title'],
+                                author=manga_data['author'],
+                                manga_url=manga_data['manga_url'],
+                                updated_at=manga_data['updated_at'],
+                                page_count=manga_data.get('page_count'),
+                                cover_image_url=manga_data.get('cover_image_url'),
+                                is_downloaded=False
+                            )
+                            db.add(new_update)
+                            total_added += 1
+                        except Exception as e:
+                            # 处理可能的唯一约束冲突（并发情况下可能发生）
+                            db.rollback()
+                            if 'unique' in str(e).lower() or 'duplicate' in str(e).lower():
+                                logger.warning(f"  并发冲突，跳过: {manga_data.get('title', 'Unknown')[:50]}")
+                                continue
+                            else:
+                                raise
                 
                 db.commit()
                 

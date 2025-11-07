@@ -73,21 +73,34 @@ def add_to_collection(request, db: Session = Depends(get_db)):
         # 这里需要根据实际网站UI来实现
         # 可能需要打开下拉菜单选择分类
         
+        # 检查是否已存在（基于manga_url去重，不是title）
+        existing = db.query(Manga).filter(Manga.manga_url == request.manga_url).first()
+        if existing:
+            return {"success": True, "message": "漫画已存在于收藏夹中"}
+        
         # 添加到数据库
         details = crawler.get_manga_details(request.manga_url)
         if details:
-            manga = Manga(
-                title=details['title'],
-                author=request.author,
-                manga_url=request.manga_url,
-                page_count=details.get('page_count'),
-                updated_at=details.get('updated_at'),
-                cover_image_url=details.get('cover_image_url')
-            )
-            db.add(manga)
-            db.commit()
-            
-            return {"success": True, "message": "已添加到收藏夹"}
+            try:
+                manga = Manga(
+                    title=details['title'],
+                    author=request.author,
+                    manga_url=request.manga_url,
+                    page_count=details.get('page_count'),
+                    updated_at=details.get('updated_at'),
+                    cover_image_url=details.get('cover_image_url')
+                )
+                db.add(manga)
+                db.commit()
+                
+                return {"success": True, "message": "已添加到收藏夹"}
+            except Exception as e:
+                db.rollback()
+                # 处理可能的唯一约束冲突
+                if 'unique' in str(e).lower() or 'duplicate' in str(e).lower():
+                    return {"success": True, "message": "漫画已存在于收藏夹中"}
+                else:
+                    raise
         else:
             raise HTTPException(status_code=500, detail="无法获取漫画详情")
     except Exception as e:
