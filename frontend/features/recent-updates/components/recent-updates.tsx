@@ -1,7 +1,7 @@
 // 最近更新组件
 "use client"
 
-import { useEffect } from "react"
+import { useEffect, useMemo } from "react"
 import { MangaCard } from "@/features/collection/components/manga-card"
 import { AuthorSection } from "@/features/collection/components/author-section"
 import { Sparkles } from "lucide-react"
@@ -57,6 +57,32 @@ export function RecentUpdates({
     }
   }
 
+  // 按更新时间排序的更新列表（不按作者分类时使用）
+  const sortedUpdates = useMemo(() => {
+    return [...updates].sort((a, b) => {
+      const dateA = a.updated_at ? new Date(a.updated_at).getTime() : 0
+      const dateB = b.updated_at ? new Date(b.updated_at).getTime() : 0
+      return dateB - dateA // 降序：最新的在前
+    })
+  }, [updates])
+
+  // 按更新时间排序的作者组（按作者分类时使用）
+  const sortedAuthorGroups = useMemo(() => {
+    return authorGroups.map(ag => ({
+      ...ag,
+      mangas: [...ag.mangas].sort((a, b) => {
+        const dateA = a.updated_at ? new Date(a.updated_at).getTime() : 0
+        const dateB = b.updated_at ? new Date(b.updated_at).getTime() : 0
+        return dateB - dateA // 降序：最新的在前
+      })
+    })).sort((a, b) => {
+      // 作者组也按最新更新时间排序
+      const latestA = a.mangas[0]?.updated_at ? new Date(a.mangas[0].updated_at).getTime() : 0
+      const latestB = b.mangas[0]?.updated_at ? new Date(b.mangas[0].updated_at).getTime() : 0
+      return latestB - latestA // 降序：最新的在前
+    })
+  }, [authorGroups])
+
   if (updates.length === 0) {
     return (
       <div className="glass rounded-lg overflow-hidden">
@@ -88,7 +114,7 @@ export function RecentUpdates({
       <div className="p-6">
         {groupByAuthor ? (
           <div className="space-y-6">
-            {authorGroups.map((authorGroup) => (
+            {sortedAuthorGroups.map((authorGroup) => (
               <AuthorSection
                 key={authorGroup.author}
                 authorGroup={authorGroup}
@@ -111,7 +137,7 @@ export function RecentUpdates({
                 : "grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 2xl:grid-cols-10"
             }`}
           >
-            {updates.map((update) => (
+            {sortedUpdates.map((update) => (
               <MangaCard
                 key={update.id}
                 manga={update}

@@ -47,6 +47,33 @@ export default function HomePage() {
 
   const pendingMangas = totalMangas - downloadedMangas
 
+  // 按更新时间排序的漫画列表（不按作者分类时使用）
+  const sortedMangas = useMemo(() => {
+    const allMangas = authorGroups.flatMap(ag => ag.mangas)
+    return [...allMangas].sort((a, b) => {
+      const dateA = a.updated_at ? new Date(a.updated_at).getTime() : 0
+      const dateB = b.updated_at ? new Date(b.updated_at).getTime() : 0
+      return dateB - dateA // 降序：最新的在前
+    })
+  }, [authorGroups])
+
+  // 按更新时间排序的作者组（按作者分类时使用）
+  const sortedAuthorGroups = useMemo(() => {
+    return authorGroups.map(ag => ({
+      ...ag,
+      mangas: [...ag.mangas].sort((a, b) => {
+        const dateA = a.updated_at ? new Date(a.updated_at).getTime() : 0
+        const dateB = b.updated_at ? new Date(b.updated_at).getTime() : 0
+        return dateB - dateA // 降序：最新的在前
+      })
+    })).sort((a, b) => {
+      // 作者组也按最新更新时间排序
+      const latestA = a.mangas[0]?.updated_at ? new Date(a.mangas[0].updated_at).getTime() : 0
+      const latestB = b.mangas[0]?.updated_at ? new Date(b.mangas[0].updated_at).getTime() : 0
+      return latestB - latestA // 降序：最新的在前
+    })
+  }, [authorGroups])
+
   const handleDownloadAllPending = async () => {
     const allPending = authorGroups.flatMap(ag =>
       ag.mangas.filter(m => !m.downloaded_at && !m.is_downloaded)
@@ -122,7 +149,7 @@ export default function HomePage() {
               </div>
             ) : groupByAuthor ? (
               <div className="space-y-6">
-                {authorGroups.map(authorGroup => (
+                {sortedAuthorGroups.map(authorGroup => (
                   <AuthorSection
                     key={authorGroup.author}
                     authorGroup={authorGroup}
@@ -145,7 +172,7 @@ export default function HomePage() {
                     : "grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 2xl:grid-cols-10"
                 }`}
               >
-                {authorGroups.flatMap(ag => ag.mangas).map(manga => (
+                {sortedMangas.map(manga => (
                   <MangaCard
                     key={manga.id}
                     manga={manga}
