@@ -1,6 +1,7 @@
 services:
   db:
     image: postgres:15-alpine
+    container_name: wnacg-downloader-db
     environment:
       POSTGRES_USER: manga_user
       POSTGRES_PASSWORD: manga_pass
@@ -8,22 +9,26 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
-      - "5432:5432"
+      - "15432:5432"
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U manga_user -d manga_db"]
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - wnacg-network
 
   backend:
     build: ./backend
+    container_name: wnacg-downloader-backend
     environment:
       # 使用PostgreSQL数据库
       DATABASE_URL: postgresql://manga_user:manga_pass@db:5432/manga_db
       MANGA_USERNAME: ${MANGA_USERNAME}
       MANGA_PASSWORD: ${MANGA_PASSWORD}
       PUBLISH_PAGE_URL: ${PUBLISH_PAGE_URL:-https://wn01.link}
+      # 下载目录指向 Komga 的漫画库目录，实现自动同步
       DOWNLOAD_DIR: /app/downloads
       COVER_DIR: /app/covers
       API_HOST: 0.0.0.0
@@ -32,29 +37,56 @@ services:
       # 最近更新搜索时排除的分类/作者名（JSON数组格式或逗号分隔）
       EXCLUDED_CATEGORIES: ${EXCLUDED_CATEGORIES:-["优秀","全部","管理分類","書架","书架","我的書架","一般","真人","同人"]}
     volumes:
-      # 下载的漫画
-      - ./backend/downloads:/app/downloads
+      # 下载的漫画 - 与 Komga 共享同一个目录
+      - ./komga-data:/app/downloads
       # 封面图片
       - ./backend/covers:/app/covers
     ports:
-      - "8000:8000"
+      - "18000:8000"
     depends_on:
       db:
         condition: service_healthy
     restart: unless-stopped
+    networks:
+      - wnacg-network
 
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+    container_name: wnacg-downloader-frontend
     ports:
-      - "3000:3000"
-    environment:
-      NEXT_PUBLIC_API_URL: http://localhost:8000
+      - "13000:3000"
     depends_on:
       - backend
     restart: unless-stopped
+    networks:
+      - wnacg-network
+
+  komga:
+    image: gotson/komga:latest
+    container_name: komga
+    restart: unless-stopped
+    ports:
+      - "25601:25600"
+    environment:
+      - TZ=Asia/Shanghai
+      # 排除扫描的目录
+      - KOMGA_LIBRARIES_SCAN_DIRECTORY_EXCLUSIONS=#recycle,@eaDir,@tmp
+      # 服务器端口（容器内部端口，Komga 默认使用 25600）
+      - KOMGA_SERVER_PORT=25600
+    volumes:
+      # Komga 配置文件目录
+      - ./komga-config:/config
+      # Komga 漫画库目录 - 与 backend 的下载目录共享
+      - ./komga-data:/data
+    networks:
+      - wnacg-network
 
 volumes:
   # PostgreSQL数据库持久化存储
   postgres_data:
+
+networks:
+  wnacg-network:
+    driver: bridge

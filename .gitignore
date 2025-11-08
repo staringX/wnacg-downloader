@@ -104,3 +104,7 @@ test_db_init.py
 backend/logs/*.log
 backend/logs/*.log.zip
 !backend/logs/.gitkeep
+
+# Komga 配置和数据目录
+komga-config/
+komga-data/

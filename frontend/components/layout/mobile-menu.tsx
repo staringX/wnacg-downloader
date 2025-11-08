@@ -19,6 +19,7 @@ import {
   Download,
   Users,
   RefreshCw,
+  ExternalLink,
 } from "lucide-react"
 
 interface MobileMenuProps {
@@ -54,6 +55,15 @@ export function MobileMenu({
   groupByAuthor,
   onGroupByAuthorChange,
 }: MobileMenuProps) {
+  // 跳转到 Komga - 直接打开 Komga 的完整 URL（避免通过 Next.js 代理导致的 SPA 路径问题）
+  const handleOpenKomga = () => {
+    if (typeof window !== "undefined") {
+      // 使用当前页面的协议和主机名，端口使用 Komga 的端口
+      const komgaUrl = `${window.location.protocol}//${window.location.hostname}:25601`
+      window.open(komgaUrl, "_blank")
+    }
+  }
+
   return (
     <Sheet>
       <SheetTrigger asChild>
@@ -69,12 +79,22 @@ export function MobileMenu({
           <SheetTitle>菜单</SheetTitle>
         </SheetHeader>
         <div className="mt-6 space-y-4">
+          {/* 跳转到 Komga 按钮 */}
+          <Button
+            onClick={handleOpenKomga}
+            variant="outline"
+            className="w-full justify-start h-12 text-base glass-card hover:shadow-lg transition-all bg-transparent"
+          >
+            <ExternalLink className="w-5 h-5 mr-3" />
+            Komga
+          </Button>
+
           {/* 预览图开关 */}
           <div className="flex items-center justify-between glass-card px-4 py-3 rounded-lg">
             <div className="flex items-center gap-3">
               <ImageIcon className="w-5 h-5 text-muted-foreground" />
               <Label htmlFor="mobile-preview-toggle" className="text-base cursor-pointer">
-                显示预览图
+                预览图
               </Label>
             </div>
             <Switch
@@ -89,7 +109,7 @@ export function MobileMenu({
             <div className="flex items-center gap-3">
               <Users className="w-5 h-5 text-muted-foreground" />
               <Label htmlFor="mobile-group-by-author-toggle" className="text-base cursor-pointer">
-                按作者分类
+                按作者
               </Label>
             </div>
             <Switch
@@ -106,7 +126,7 @@ export function MobileMenu({
             className="w-full justify-start h-12 text-base"
           >
             <CheckCircle2 className="w-5 h-5 mr-3" />
-            {selectionMode ? "退出多选模式" : "进入多选模式"}
+            {selectionMode ? "退出多选" : "多选"}
           </Button>
 
           {/* 删除选中 */}
@@ -116,7 +136,7 @@ export function MobileMenu({
               className="w-full justify-start h-12 text-base bg-red-500 text-white hover:bg-red-600"
             >
               <X className="w-5 h-5 mr-3" />
-              删除选中 ({selectedCount})
+              删除 ({selectedCount})
             </Button>
           )}
 
@@ -128,11 +148,7 @@ export function MobileMenu({
             className="w-full justify-start h-12 text-base glass-card hover:shadow-lg transition-all bg-transparent"
           >
             <RefreshCw className={`w-5 h-5 mr-3 ${isSyncing ? "animate-spin" : ""}`} />
-            {isSyncing
-              ? `同步中...${syncProgressText}`
-              : currentTab === "collection"
-              ? "同步收藏夹"
-              : "同步最近更新"}
+            {isSyncing ? `同步中${syncProgressText}` : "同步"}
           </Button>
 
           {/* 统一的全部下载按钮 */}
@@ -142,9 +158,7 @@ export function MobileMenu({
               className="w-full justify-start h-12 text-base bg-primary text-primary-foreground hover:bg-primary/90"
             >
               <Download className="w-5 h-5 mr-3" />
-              {currentTab === "collection"
-                ? `下载全部待下载 (${pendingCount})`
-                : `下载全部新更新 (${pendingCount})`}
+              下载全部 ({pendingCount})
             </Button>
           )}
         </div>

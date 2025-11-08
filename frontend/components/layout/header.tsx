@@ -5,7 +5,7 @@ import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Switch } from "@/components/ui/switch"
 import { Label } from "@/components/ui/label"
-import { Download, ImageIcon, CheckCircle2, X, Users, RefreshCw } from "lucide-react"
+import { Download, ImageIcon, CheckCircle2, X, Users, RefreshCw, ExternalLink } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { syncApi } from "@/lib/api"
 import { useTaskStatus, useRunningTasks } from "@/hooks/use-task-status"
@@ -190,6 +190,15 @@ export function Header({
   // 根据当前tab获取下载全部函数
   const handleDownloadAll = currentTab === "collection" ? onDownloadAllPending : onDownloadAllUpdates
 
+  // 跳转到 Komga - 直接打开 Komga 的完整 URL（避免通过 Next.js 代理导致的 SPA 路径问题）
+  const handleOpenKomga = () => {
+    if (typeof window !== "undefined") {
+      // 使用当前页面的协议和主机名，端口使用 Komga 的端口
+      const komgaUrl = `${window.location.protocol}//${window.location.hostname}:25601`
+      window.open(komgaUrl, "_blank")
+    }
+  }
+
   // 检测是否为移动端
   useEffect(() => {
     const checkMobile = () => {
@@ -256,10 +265,21 @@ export function Header({
             </div>
 
             <div className="flex items-center gap-3">
+              {/* 跳转到 Komga 按钮 */}
+              <Button
+                onClick={handleOpenKomga}
+                variant="outline"
+                className="glass-card hover:shadow-lg transition-all bg-transparent"
+                title="打开 Komga 漫画阅读器"
+              >
+                <ExternalLink className="w-4 h-4 mr-2" />
+                Komga
+              </Button>
+
               <div className="flex items-center gap-2 glass-card px-3 py-2 rounded-lg">
                 <ImageIcon className="w-4 h-4 text-muted-foreground" />
                 <Label htmlFor="preview-toggle" className="text-sm cursor-pointer">
-                  预览图
+                  预览
                 </Label>
                 <Switch id="preview-toggle" checked={showPreview} onCheckedChange={onPreviewChange} />
               </div>
@@ -268,7 +288,7 @@ export function Header({
               <div className="flex items-center gap-2 glass-card px-3 py-2 rounded-lg">
                 <Users className="w-4 h-4 text-muted-foreground" />
                 <Label htmlFor="group-by-author-toggle" className="text-sm cursor-pointer">
-                  按作者分类
+                  按作者
                 </Label>
                 <Switch
                   id="group-by-author-toggle"
@@ -287,7 +307,7 @@ export function Header({
                 }
               >
                 <CheckCircle2 className="w-4 h-4 mr-2" />
-                {selectionMode ? "退出多选" : "多选模式"}
+                {selectionMode ? "退出" : "多选"}
               </Button>
 
               {selectionMode && selectedCount > 0 && (
@@ -296,7 +316,7 @@ export function Header({
                   className="bg-red-500 text-white hover:bg-red-600 hover:scale-105 active:scale-95 transition-all duration-200 shadow-lg"
                 >
                   <X className="w-4 h-4 mr-2" />
-                  删除选中 ({selectedCount})
+                  删除 ({selectedCount})
                 </Button>
               )}
 
@@ -308,11 +328,7 @@ export function Header({
                 className="glass-card hover:shadow-lg transition-all bg-transparent"
               >
                 <RefreshCw className={`w-4 h-4 mr-2 ${isSyncing ? "animate-spin" : ""}`} />
-                {isSyncing
-                  ? `同步中...${progressText}`
-                  : currentTab === "collection"
-                  ? "同步收藏夹"
-                  : "同步最近更新"}
+                {isSyncing ? `同步中${progressText}` : "同步"}
               </Button>
 
               {/* 统一的全部下载按钮 */}
@@ -322,9 +338,7 @@ export function Header({
                   className="bg-primary text-primary-foreground hover:bg-primary/90 hover:scale-105 active:scale-95 transition-all duration-200 shadow-lg"
                 >
                   <Download className="w-4 h-4 mr-2" />
-                  {currentTab === "collection"
-                    ? `下载全部待下载 (${pendingCount})`
-                    : `下载全部新更新 (${pendingCount})`}
+                  下载全部 ({pendingCount})
                 </Button>
               )}
             </div>
