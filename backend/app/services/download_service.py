@@ -11,7 +11,7 @@ from app.database import SessionLocal
 from app.models import Manga
 from app.crawler.base import MangaCrawler
 from app.config import settings
-from app.utils.logger import logger
+from app.utils.logger import logger, get_error_message
 from app.services.task_manager import TaskManager
 from app.services.download_queue import download_queue_manager
 
@@ -55,7 +55,8 @@ class MangaDownloader:
             return False
     
     def download_manga_stream(self, manga_title: str, images: List[Dict], 
-                             author: str = "", resume: bool = True, progress_callback=None):
+                             author: str = "", resume: bool = True, progress_callback=None,
+                             manga_metadata: Optional[Dict] = None):
         """
         下载漫画（生成器版本）- 支持断点续传和实时保存
         
@@ -170,9 +171,79 @@ class MangaDownloader:
             
             # 创建CBZ文件
             with zipfile.ZipFile(cbz_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+                # 添加所有图片文件
                 for file_path in downloaded_files:
                     if file_path.is_file():
                         zipf.write(file_path, file_path.name)
+                
+                # 添加 ComicInfo.xml 文件
+                try:
+                    from app.utils.comic_info import generate_comic_info_xml
+                    from datetime import datetime
+                    
+                    # 准备 ComicInfo.xml 数据
+                    comic_info_kwargs = {}
+                    
+                    # 从 manga_metadata 中提取信息
+                    updated_at = datetime.now()
+                    manga_url = None
+                    tags_list = []
+                    
+                    if manga_metadata:
+                        # 更新日期
+                        if manga_metadata.get('updated_at'):
+                            updated_at = manga_metadata['updated_at']
+                        
+                        # 漫画URL
+                        if manga_metadata.get('manga_url'):
+                            manga_url = manga_metadata['manga_url']
+                        
+                        # 标签
+                        if manga_metadata.get('tags'):
+                            tags_list = manga_metadata['tags']
+                            if isinstance(tags_list, list):
+                                comic_info_kwargs['tags'] = ', '.join(tags_list)
+                        
+                        # 分类/流派
+                        if manga_metadata.get('category'):
+                            category = manga_metadata['category']
+                            # 尝试从分类中提取流派信息
+                            if '雜誌' in category or '杂志' in category:
+                                comic_info_kwargs['genre'] = '杂志'
+                            elif '同人' in category:
+                                comic_info_kwargs['genre'] = '同人'
+                            elif '單行本' in category or '单行本' in category:
+                                comic_info_kwargs['genre'] = '单行本'
+                        
+                        # 简介
+                        if manga_metadata.get('summary'):
+                            comic_info_kwargs['summary'] = manga_metadata['summary']
+                        
+                        # 上传者作为译者或编辑
+                        if manga_metadata.get('uploader'):
+                            # 如果标签中有"中文翻譯"，则上传者可能是译者
+                            if tags_list and any('翻譯' in tag or '翻译' in tag for tag in tags_list):
+                                comic_info_kwargs['translator'] = manga_metadata['uploader']
+                            else:
+                                comic_info_kwargs['editor'] = manga_metadata['uploader']
+                    
+                    comic_info_xml = generate_comic_info_xml(
+                        title=manga_title,
+                        author=author,
+                        page_count=len(images),
+                        updated_at=updated_at,
+                        manga_url=manga_url,
+                        is_manga=True,  # 默认是漫画，从右到左阅读
+                        language_iso="zh-CN",  # 默认中文
+                        **comic_info_kwargs
+                    )
+                    
+                    # 将 XML 内容写入 ZIP
+                    zipf.writestr("ComicInfo.xml", comic_info_xml.encode('utf-8'))
+                    logger.info(f"✅ ComicInfo.xml 已添加到 CBZ 文件")
+                except Exception as e:
+                    logger.warning(f"⚠️  添加 ComicInfo.xml 失败: {get_error_message(e)}")
+                    # 即使失败也继续创建 CBZ
             
             logger.info(f"✅ CBZ 文件已创建: {cbz_path}")
             
@@ -314,6 +385,7 @@ class DownloadService:
                 db.commit()
                 
                 # 获取漫画详情
+                details = None
                 if not manga.page_count or not manga.cover_image_url:
                     TaskManager.update_task(db, task_id, message="获取漫画详情...")
                     details = crawler.get_manga_details(manga.manga_url)
@@ -325,6 +397,10 @@ class DownloadService:
                         if details.get('cover_image_url'):
                             manga.cover_image_url = details['cover_image_url']
                         db.commit()
+                else:
+                    # 即使已有基本信息，也获取完整详情以用于 ComicInfo.xml
+                    TaskManager.update_task(db, task_id, message="获取漫画详情...")
+                    details = crawler.get_manga_details(manga.manga_url)
                 
                 # 获取图片列表
                 TaskManager.update_task(db, task_id, message="获取图片列表...")
@@ -346,7 +422,18 @@ class DownloadService:
                 cbz_path = None
                 cover_path = None
                 
-                for progress in downloader.download_manga_stream(manga.title, images, author=manga.author, resume=True):
+                # 准备元数据（用于 ComicInfo.xml）
+                manga_metadata = details if details else {}
+                if manga_metadata:
+                    # 确保包含 manga_url
+                    manga_metadata['manga_url'] = manga.manga_url
+                
+                for progress in downloader.download_manga_stream(
+                    manga.title, images, 
+                    author=manga.author, 
+                    resume=True,
+                    manga_metadata=manga_metadata
+                ):
                     status = progress.get('status')
                     
                     # 更新下载进度

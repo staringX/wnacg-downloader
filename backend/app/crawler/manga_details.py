@@ -74,12 +74,59 @@ class MangaDetailsCrawler:
             except Exception as e:
                 logger.debug(f"    获取封面失败: {get_error_message(e)}")
             
+            # 获取分类信息
+            category = None
+            try:
+                # 查找包含"分類："的标签
+                category_elem = self.driver.find_element(By.XPATH, "//label[contains(text(), '分類：')]")
+                if category_elem:
+                    category_text = category_elem.text.replace("分類：", "").strip()
+                    category = category_text
+            except Exception as e:
+                logger.debug(f"    获取分类失败: {get_error_message(e)}")
+            
+            # 获取标签信息
+            tags = []
+            try:
+                # 查找标签链接（在"標籤："之后的所有链接）
+                tag_links = self.driver.find_elements(By.XPATH, "//label[contains(text(), '標籤：')]/following-sibling::a[contains(@href, 'albums-index-tag-')]")
+                for tag_link in tag_links:
+                    tag_text = tag_link.text.strip()
+                    if tag_text and tag_text != "+TAG":
+                        tags.append(tag_text)
+            except Exception as e:
+                logger.debug(f"    获取标签失败: {get_error_message(e)}")
+            
+            # 获取上传者/作者信息
+            uploader = None
+            try:
+                # 查找上传者链接（包含用户头像的链接）
+                uploader_link = self.driver.find_element(By.XPATH, "//a[contains(@href, 'search/index.php') and .//img[contains(@src, 'userpic')]]")
+                if uploader_link:
+                    uploader = uploader_link.text.strip()
+            except Exception as e:
+                logger.debug(f"    获取上传者失败: {get_error_message(e)}")
+            
+            # 获取简介
+            summary = None
+            try:
+                # 查找简介内容（在"簡介："标签之后）
+                summary_elem = self.driver.find_element(By.XPATH, "//p[contains(text(), '簡介：')]/following-sibling::*[1]")
+                if summary_elem:
+                    summary = summary_elem.text.strip()
+            except Exception as e:
+                logger.debug(f"    获取简介失败: {get_error_message(e)}")
+            
             return {
                 'title': title,
                 'manga_url': manga_url,
                 'page_count': page_count,
                 'updated_at': updated_at,
-                'cover_image_url': cover_url
+                'cover_image_url': cover_url,
+                'category': category,
+                'tags': tags,
+                'uploader': uploader,
+                'summary': summary
             }
         except Exception as e:
             logger.error(f"获取漫画详情失败: {get_error_message(e)}")
