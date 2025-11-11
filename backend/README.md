@@ -84,11 +84,15 @@ backend/
 │   │   ├── recent_updates.py # 最近更新
 │   │   └── tasks.py          # 任务状态和SSE
 │   ├── services/         # 业务服务
-│   │   ├── task_manager.py      # 任务管理器
-│   │   ├── singleton_manager.py # 单例管理器
-│   │   └── download_queue.py    # 下载队列管理器
+│   │   ├── task_manager.py           # 任务管理器
+│   │   ├── sync_singleton.py         # 同步收藏夹单例管理器
+│   │   ├── recent_updates_singleton.py # 最近更新单例管理器
+│   │   ├── download_queue.py         # 下载队列管理器
+│   │   ├── sync_service.py           # 同步收藏夹业务逻辑
+│   │   ├── recent_updates_service.py # 最近更新业务逻辑
+│   │   └── download_service.py       # 下载业务逻辑
 │   ├── utils/            # 工具模块
-│   │   ├── downloader.py    # 下载器
+│   │   ├── comic_info.py    # ComicInfo.xml 生成工具
 │   │   └── logger.py        # 日志配置
 │   ├── models.py          # 数据库模型
 │   ├── schemas.py         # Pydantic模式
@@ -125,7 +129,7 @@ backend/
 - `GET /api/events` - SSE事件流（实时任务状态更新）
 - `POST /api/tasks/cleanup` - 手动清理过期任务
 
-详细API文档：http://localhost:8000/docs
+详细API文档（FastAPI自动生成）：http://localhost:18000/docs
 
 ## 核心模块说明
 
@@ -140,16 +144,16 @@ backend/
 ### 服务模块 (services/)
 
 - **task_manager.py**: 任务管理器，管理任务状态和SSE推送
-- **sync_singleton.py**: 同步收藏夹单例管理器
-- **recent_updates_singleton.py**: 最近更新单例管理器
+- **sync_singleton.py**: 同步收藏夹单例管理器，防止重复执行
+- **recent_updates_singleton.py**: 最近更新单例管理器，防止重复执行
 - **download_queue.py**: 下载队列管理器，管理下载任务的队列执行
 - **sync_service.py**: 同步收藏夹业务逻辑
 - **recent_updates_service.py**: 最近更新业务逻辑
-- **download_service.py**: 下载业务逻辑
+- **download_service.py**: 下载业务逻辑，包含 ComicInfo.xml 生成
 
 ### 工具模块 (utils/)
 
-- **downloader.py**: 下载器，支持断点续传和CBZ打包
+- **comic_info.py**: ComicInfo.xml 生成工具，自动生成漫画元数据文件
 - **logger.py**: 日志配置，使用loguru进行结构化日志记录
 
 ## 配置说明
@@ -185,11 +189,12 @@ backend/
 ## 注意事项
 
 1. **首次运行**：需要确保Chromium和ChromiumDriver已正确安装（Docker中已包含）
-2. **下载目录**：下载的漫画文件保存在 `downloads` 目录（按作者分类）
+2. **下载目录**：下载的漫画文件保存在 `downloads` 目录（按作者分类），CBZ 文件自动包含 ComicInfo.xml 元数据
 3. **封面图片**：封面图片保存在 `covers` 目录
-4. **合理使用**：请遵守网站的使用条款，不要过度爬取
-5. **任务管理**：长时间运行的任务可以通过任务管理API查询状态
-6. **队列管理**：下载队列中的任务会按顺序执行，不会丢失
+4. **ComicInfo.xml**：自动从网页提取漫画信息（分类、标签、上传者、简介等）并生成标准格式的元数据文件
+5. **合理使用**：请遵守网站的使用条款，不要过度爬取
+6. **任务管理**：长时间运行的任务可以通过任务管理API查询状态
+7. **队列管理**：下载队列中的任务会按顺序执行，不会丢失
 
 ## 开发
 
@@ -204,15 +209,15 @@ backend/
 
 ```bash
 # 测试单例模式
-curl -X POST http://localhost:8000/api/sync
-curl -X POST http://localhost:8000/api/sync  # 应该返回409
+curl -X POST http://localhost:18000/api/sync
+curl -X POST http://localhost:18000/api/sync  # 应该返回409
 
 # 测试下载队列
-curl -X POST http://localhost:8000/api/download/{manga_id}
-curl http://localhost:8000/api/download/queue  # 查看队列
+curl -X POST http://localhost:18000/api/download/{manga_id}
+curl http://localhost:18000/api/download/queue  # 查看队列
 
 # 测试任务状态
-curl http://localhost:8000/api/tasks/running/list?task_type=download
+curl http://localhost:18000/api/tasks/running/list?task_type=download
 ```
 
 ## 依赖

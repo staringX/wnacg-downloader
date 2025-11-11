@@ -1,24 +1,64 @@
-# 漫画下载管理器
+# WNACG 漫画下载管理器
 
-一个完整的漫画下载和管理系统，包含前端和后端。支持自动同步收藏夹、下载漫画、实时任务状态更新等功能。
+一个专为 **WNACG（绅士漫画）** 设计的漫画下载和管理系统。通过登录您的 WNACG 账号，自动爬取收藏夹中的漫画并下载到本地。提供完整的 Docker 部署方案，适合在 NAS（如群晖）中部署。项目集成了 **Komga** 漫画阅读器，方便阅读和管理下载的漫画。
+
+## 🎯 项目目的
+
+本项目旨在帮助用户：
+- 📥 **自动下载收藏的漫画**：从 WNACG 账号的收藏夹中爬取漫画并下载到本地
+- 📦 **自动打包为 CBZ 格式**：下载的漫画自动打包为 CBZ 文件，包含完整的 ComicInfo.xml 元数据
+- 📚 **集成 Komga 阅读器**：下载的漫画自动同步到 Komga，提供便捷的阅读体验
+- 🏠 **NAS 友好部署**：提供完整的 Docker Compose 配置，适合在群晖等 NAS 设备上部署
+- 🔄 **自动同步更新**：自动检测收藏作者的新作品，及时获取更新
 
 ## ✨ 功能特性
 
 ### 核心功能
-- 📚 **自动同步收藏夹**：按作者分类，支持分页爬取
-- ⬇️ **智能下载队列**：支持单个和批量下载，自动排队执行
-- 🔄 **最近更新**：自动检测收藏作者的新作品
-- 🖼️ **封面管理**：自动保存和显示封面图片
-- 📦 **CBZ打包**：自动将下载的图片打包为CBZ格式
+
+#### 📚 收藏夹同步
+**目的**：从 WNACG 账号的收藏夹中爬取所有收藏的漫画信息，保存到本地数据库。支持按作者分类，自动处理分页，确保完整获取所有收藏内容。
+
+#### ⬇️ 漫画下载
+**目的**：将收藏的漫画从网站爬取并下载到本地，自动打包为 CBZ 格式文件。
+- **单本下载**：点击单本漫画的下载按钮，将该漫画加入下载队列
+- **批量下载**：点击"下载全部"按钮，将所有未下载的漫画加入下载队列
+- **自动排队**：下载任务自动排队执行，不会拒绝用户请求
+- **断点续传**：下载中断后可以自动恢复，跳过已下载的页面
+
+#### 🔄 最近更新同步
+**目的**：根据收藏夹中保存的作者名，自动搜索这些作者的所有作品，找出更新日期晚于已保存漫画的更新日期的作品，帮助用户及时发现新内容。
+
+#### 📦 CBZ 打包与元数据
+**目的**：将下载的图片自动打包为 CBZ 格式（ZIP 压缩包），并在 CBZ 文件中自动添加 ComicInfo.xml 元数据文件，包含标题、作者、页数、发布日期、分类、标签、简介等信息，兼容 Komga 等主流漫画阅读器。
+
+#### 🖼️ 封面管理
+**目的**：自动保存和显示漫画封面图片，方便在列表中快速识别漫画。
+
+#### 📚 Komga 集成
+**目的**：项目集成了 Komga 漫画阅读器，下载的漫画自动同步到 Komga 的数据目录，用户可以通过前端"Komga"按钮直接访问阅读器，享受便捷的阅读体验。
 
 ### 高级功能
-- 🔒 **单例模式**：同步任务使用单例模式，防止重复执行
-- 📋 **下载队列**：下载任务自动排队，不会拒绝用户请求
-- 📡 **实时状态更新**：使用SSE（Server-Sent Events）实时推送任务状态
-- 💾 **断点续传**：下载中断后可以自动恢复
-- 🔍 **文件验证**：自动验证本地文件完整性
-- 📊 **任务管理**：完整的任务状态跟踪和查询系统
-- 📝 **日志系统**：使用loguru进行结构化日志记录
+
+#### 🔒 单例模式
+**目的**：同步收藏夹和同步最近更新任务使用单例模式，防止同一任务重复执行，避免资源冲突和数据不一致。
+
+#### 📋 下载队列
+**目的**：下载任务使用队列模式，所有下载请求都会加入队列等待执行，不会因为任务繁忙而拒绝用户请求，确保所有下载任务都能完成。
+
+#### 📡 实时状态更新
+**目的**：使用 SSE（Server-Sent Events）实时推送任务状态到前端，用户无需刷新页面即可看到任务进度和状态变化。
+
+#### 💾 断点续传
+**目的**：下载中断后，重新下载会跳过已下载的页面，节省时间和带宽。
+
+#### 🔍 文件验证
+**目的**：自动验证本地文件的完整性，确保下载的漫画文件完整可用。
+
+#### 📊 任务管理
+**目的**：提供完整的任务状态跟踪和查询系统，用户可以随时查看任务进度和状态。
+
+#### 📝 日志系统
+**目的**：使用 loguru 进行结构化日志记录，方便排查问题和监控系统运行状态。
 
 ## 🏗️ 项目结构
 
@@ -44,21 +84,22 @@ manga/
 │   │   │   ├── recent_updates.py # 最近更新
 │   │   │   └── tasks.py          # 任务状态和SSE
 │   │   ├── services/     # 业务服务
-│   │   │   ├── task_manager.py      # 任务管理器
-│   │   │   ├── singleton_manager.py # 单例管理器
-│   │   │   └── download_queue.py    # 下载队列管理器
+│   │   │   ├── task_manager.py           # 任务管理器
+│   │   │   ├── sync_singleton.py         # 同步收藏夹单例管理器
+│   │   │   ├── recent_updates_singleton.py # 最近更新单例管理器
+│   │   │   ├── download_queue.py         # 下载队列管理器
+│   │   │   ├── sync_service.py           # 同步收藏夹业务逻辑
+│   │   │   ├── recent_updates_service.py # 最近更新业务逻辑
+│   │   │   └── download_service.py       # 下载业务逻辑
 │   │   ├── utils/        # 工具模块
-│   │   │   ├── downloader.py    # 下载器
+│   │   │   ├── comic_info.py    # ComicInfo.xml 生成工具
 │   │   │   └── logger.py        # 日志配置
 │   │   ├── models.py     # 数据库模型
 │   │   ├── schemas.py    # Pydantic模式
 │   │   └── main.py       # FastAPI应用入口
 │   └── Dockerfile
-├── docs/                 # 文档
-│   ├── 单例模式和下载队列方案分析.md
-│   ├── 队列持久化方案分析.md
-│   └── 单例模式和下载队列实现总结.md
-└── docker-compose.yml    # Docker编排文件
+├── docker-compose.yml    # Docker编排文件（本地开发）
+└── docker-compose.synology.yml  # Docker编排文件（群晖NAS）
 ```
 
 ## 🚀 快速开始
@@ -72,26 +113,35 @@ cd manga
 ```
 
 2. **配置环境变量**（必填）
-复制 `.env.example` 为 `.env` 并填写实际值：
+
+创建 `.env` 文件并填写您的 WNACG 账号信息：
 ```bash
-cp .env.example .env
 # 编辑 .env 文件，填写 MANGA_USERNAME 和 MANGA_PASSWORD
 ```
 
 `.env` 文件示例：
 ```env
-MANGA_USERNAME=your_username
-MANGA_PASSWORD=your_password
+# WNACG 账号信息（必填）
+MANGA_USERNAME=your_wnacg_username
+MANGA_PASSWORD=your_wnacg_password
+
+# 发布页地址（可选，默认：https://wn01.link）
 PUBLISH_PAGE_URL=https://wn01.link
+
+# 数据库配置（Docker 部署时使用默认值即可）
 DATABASE_URL=postgresql://manga_user:manga_pass@db:5432/manga_db
-CORS_ORIGINS=["http://localhost:3000"]
-# 最近更新搜索时排除的分类/作者名（JSON数组格式或逗号分隔）
+
+# CORS 配置（可选）
+CORS_ORIGINS=["http://localhost:13000"]
+
+# 最近更新搜索时排除的分类/作者名（可选）
+# 支持 JSON 数组格式或逗号分隔格式
 EXCLUDED_CATEGORIES=["优秀","全部","管理分類","書架","书架","我的書架","一般","真人","同人"]
 ```
 
 **重要提示：**
 - `.env` 文件已添加到 `.gitignore`，不会被提交到Git仓库
-- `MANGA_USERNAME` 和 `MANGA_PASSWORD` 是必填项，必须通过环境变量配置
+- `MANGA_USERNAME` 和 `MANGA_PASSWORD` 是必填项，必须填写您的 WNACG 账号信息
 - `EXCLUDED_CATEGORIES`: 在搜索最近更新时排除的分类或作者名。支持两种格式：
   - JSON数组格式：`["优秀","全部","一般","真人","同人"]`
   - 逗号分隔格式：`优秀,全部,一般,真人,同人`
@@ -102,9 +152,10 @@ docker-compose up -d
 ```
 
 4. **访问应用**
-- 前端：http://localhost:3000
-- 后端API：http://localhost:8000
-- API文档：http://localhost:8000/docs
+- 前端：http://localhost:13000
+- 后端API：http://localhost:18000
+- API文档（FastAPI自动生成）：http://localhost:18000/docs
+- Komga：http://localhost:25601
 
 ### 手动安装
 
@@ -152,13 +203,14 @@ pnpm dev
 
 | 变量名 | 说明 | 是否必填 | 示例 |
 |--------|------|---------|------|
-| `DATABASE_URL` | PostgreSQL数据库连接字符串 | 是 | `postgresql://manga_user:manga_pass@db:5432/manga_db` |
-| `MANGA_USERNAME` | 漫画网站用户名 | 是 | `your_username` |
-| `MANGA_PASSWORD` | 漫画网站密码 | 是 | `your_password` |
-| `PUBLISH_PAGE_URL` | 发布页地址 | 否 | `https://wn01.link` |
+| `MANGA_USERNAME` | WNACG 账号用户名 | 是 | `your_wnacg_username` |
+| `MANGA_PASSWORD` | WNACG 账号密码 | 是 | `your_wnacg_password` |
+| `PUBLISH_PAGE_URL` | WNACG 发布页地址 | 否 | `https://wn01.link` |
+| `DATABASE_URL` | PostgreSQL数据库连接字符串 | 是（Docker 部署时自动配置） | `postgresql://manga_user:manga_pass@db:5432/manga_db` |
 | `DOWNLOAD_DIR` | 下载目录 | 否 | `/app/downloads` |
 | `COVER_DIR` | 封面目录 | 否 | `/app/covers` |
-| `CORS_ORIGINS` | CORS允许的来源（JSON数组） | 否 | `["http://localhost:3000"]` |
+| `CORS_ORIGINS` | CORS允许的来源（JSON数组） | 否 | `["http://localhost:13000"]` |
+| `EXCLUDED_CATEGORIES` | 最近更新搜索时排除的分类（JSON数组或逗号分隔） | 否 | `["优秀","全部","一般","真人","同人"]` |
 
 ### 数据库
 
@@ -196,7 +248,7 @@ pnpm dev
 - `GET /api/events` - SSE事件流（实时任务状态更新）
 - `POST /api/tasks/cleanup` - 手动清理过期任务
 
-详细API文档：http://localhost:8000/docs
+详细API文档（FastAPI自动生成）：http://localhost:18000/docs
 
 ## 🎯 核心特性说明
 
@@ -250,6 +302,7 @@ pnpm dev
 - **容器化**: Docker, Docker Compose
 - **数据库**: PostgreSQL 15 (Alpine)
 - **浏览器**: Chromium (Docker内)
+- **漫画阅读器**: Komga（可选，已集成）
 
 ## 📁 数据存储
 
@@ -258,7 +311,7 @@ pnpm dev
 backend/
 ├── downloads/        # 下载的漫画（按作者分类）
 │   └── 作者名/
-│       └── 漫画标题.cbz
+│       └── 漫画标题.cbz  # 包含 ComicInfo.xml 元数据文件
 ├── covers/          # 封面图片
 ├── logs/            # 日志文件
 │   ├── manga_YYYY-MM-DD.log      # 详细日志
@@ -266,6 +319,21 @@ backend/
 │   └── crawler_YYYY-MM-DD.log    # 爬虫日志
 └── data/            # 其他数据文件
 ```
+
+### ComicInfo.xml 元数据
+
+下载的 CBZ 文件会自动包含 `ComicInfo.xml` 元数据文件，支持以下信息：
+
+- **基本信息**：标题、作者、页数、发布日期
+- **分类信息**：流派（从网站分类自动转换）
+- **标签**：所有标签（逗号分隔）
+- **简介**：漫画简介（如果有）
+- **链接**：漫画原始 URL
+- **语言**：默认 zh-CN
+- **阅读方向**：从右到左（Manga: YesAndRightToLeft）
+- **译者/编辑**：根据标签自动识别
+
+这些元数据兼容 **Komga** 等主流漫画阅读器，可以更好地组织和展示漫画信息。
 
 ### 数据库表
 - `mangas`: 漫画信息表
@@ -282,22 +350,27 @@ backend/
 
 日志位置：`backend/logs/`
 
-## 🚨 注意事项
+## 🚨 使用说明
 
-1. **首次使用**：需要点击"同步收藏夹"按钮来获取收藏列表
-2. **下载目录**：下载的漫画保存在 `backend/downloads` 目录（按作者分类）
-3. **封面图片**：封面保存在 `backend/covers` 目录
-4. **合理使用**：请遵守网站使用条款，合理使用爬虫功能
-5. **任务状态**：长时间运行的任务可以通过任务管理API查询状态
-6. **队列管理**：下载队列中的任务会按顺序执行，不会丢失
+### 首次使用流程
 
-## 📚 文档
+1. **配置账号**：在 `.env` 文件中填写您的 WNACG 账号信息（`MANGA_USERNAME` 和 `MANGA_PASSWORD`）
+2. **启动服务**：运行 `docker-compose up -d` 启动所有服务
+3. **同步收藏夹**：在前端界面点击"同步"按钮，系统会自动登录您的 WNACG 账号并爬取收藏夹中的所有漫画信息
+4. **下载漫画**：
+   - **单本下载**：点击漫画卡片上的下载按钮，将该漫画加入下载队列
+   - **批量下载**：点击"下载全部"按钮，将所有未下载的漫画加入下载队列
+5. **阅读漫画**：下载完成后，点击"Komga"按钮打开 Komga 阅读器，即可阅读下载的漫画
 
-- [单例模式和下载队列方案分析](docs/单例模式和下载队列方案分析.md)
-- [队列持久化方案分析](docs/队列持久化方案分析.md)
-- [单例模式和下载队列实现总结](docs/单例模式和下载队列实现总结.md)
-- [Docker部署文档](README.Docker.md)（如果存在）
-- [群晖NAS部署指南](DEPLOY_SYNOLOGY.md)
+### 重要提示
+
+- **下载目录**：下载的漫画保存在 `backend/downloads` 目录（按作者分类），CBZ 文件包含 ComicInfo.xml 元数据
+- **封面图片**：封面保存在 `backend/covers` 目录
+- **Komga 集成**：下载的漫画会自动同步到 Komga 的数据目录，可通过前端"Komga"按钮访问
+- **合理使用**：请遵守 WNACG 网站使用条款，合理使用爬虫功能，避免对服务器造成过大压力
+- **任务状态**：长时间运行的任务可以通过任务管理API查询状态
+- **队列管理**：下载队列中的任务会按顺序执行，不会丢失
+
 
 ## 🔧 开发
 
@@ -312,18 +385,27 @@ backend/
 
 ```bash
 # 测试单例模式
-curl -X POST http://localhost:8000/api/sync
-curl -X POST http://localhost:8000/api/sync  # 应该返回409
+curl -X POST http://localhost:18000/api/sync
+curl -X POST http://localhost:18000/api/sync  # 应该返回409
 
 # 测试下载队列
-curl -X POST http://localhost:8000/api/download/{manga_id}
-curl http://localhost:8000/api/download/queue  # 查看队列
+curl -X POST http://localhost:18000/api/download/{manga_id}
+curl http://localhost:18000/api/download/queue  # 查看队列
 
 # 测试任务状态
-curl http://localhost:8000/api/tasks/running/list?task_type=download
+curl http://localhost:18000/api/tasks/running/list?task_type=download
 ```
 
 ## 📝 更新日志
+
+### v2.1.0
+- ✅ 添加 ComicInfo.xml 自动生成功能
+- ✅ 增强漫画详情提取（分类、标签、上传者、简介）
+- ✅ 自动填充 ComicInfo.xml 元数据
+- ✅ 集成 Komga 漫画阅读器
+- ✅ 优化移动端 UI（响应式设计、浮动菜单）
+- ✅ 简化按钮文字，优化用户体验
+- ✅ 统一端口配置，使用非默认端口
 
 ### v2.0.0
 - ✅ 实现单例模式和下载队列
