@@ -2,6 +2,106 @@
 
 一个专为 **WNACG（绅士漫画）** 设计的漫画下载和管理系统。通过登录您的 WNACG 账号，自动爬取收藏夹中的漫画并下载到本地。提供完整的 Docker 部署方案，适合在 NAS（如群晖）中部署。项目集成了 **Komga** 漫画阅读器，方便阅读和管理下载的漫画。
 
+## 🚀 Docker 快速开始（5分钟开箱即用）
+
+### 第一步：修改 Docker Compose 配置文件
+
+根据你的部署方式，选择对应的配置文件进行修改：
+
+#### 群晖NAS用户（推荐）
+
+编辑 `docker-compose.synology.yml` 文件，找到以下位置并修改：
+
+1. **修改 WNACG 账号信息**（第65-67行）：
+```yaml
+environment:
+  # ⚠️【必填】漫画网站账号用户名 - 将 ${MANGA_USERNAME} 替换为你的实际用户名
+  MANGA_USERNAME: 你的WNACG用户名
+  # ⚠️【必填】漫画网站账号密码 - 将 ${MANGA_PASSWORD} 替换为你的实际密码
+  MANGA_PASSWORD: 你的WNACG密码
+```
+
+2. **修改存储路径**（第78、80、82、117、119行）：
+```yaml
+volumes:
+  # ⚠️【必填】下载的漫画目录 - 将 ${MANGA_DOWNLOAD_PATH:-/volume1/scdata/comic/wnacg} 替换为你的实际路径
+  - /volume1/scdata/comic/wnacg:/app/downloads
+  # ⚠️【必填】封面图片目录 - 将 ${BASE_PATH:-/volume1/docker} 替换为你的实际路径
+  - /volume1/docker/wnacg-downloader/backend/covers:/app/covers
+  # ⚠️【必填】日志文件目录
+  - /volume1/docker/wnacg-downloader/backend/logs:/app/logs
+```
+
+在 `komga` 服务中（第117、119行）：
+```yaml
+volumes:
+  # ⚠️【必填】Komga 配置文件目录 - 将 ${BASE_PATH:-/volume1/docker} 替换为你的实际路径
+  - /volume1/docker/komga/config:/config
+  # ⚠️【必填】Komga 漫画库目录 - 将 ${MANGA_DOWNLOAD_PATH:-/volume1/scdata/comic/wnacg} 替换为你的实际路径
+  - /volume1/scdata/comic/wnacg:/data
+```
+
+**路径示例：**
+- 群晖NAS：`/volume1/docker`、`/volume1/scdata/comic/wnacg`
+- 本地Linux：`/home/user/docker`、`/home/user/comics`
+- 本地Mac：`/Users/username/docker`、`/Users/username/comics`
+
+#### 本地开发用户
+
+编辑 `docker-compose.yml` 文件，找到以下位置并修改（第28-29行）：
+```yaml
+environment:
+  # ⚠️【必填】将 ${MANGA_USERNAME} 替换为你的实际用户名
+  MANGA_USERNAME: 你的WNACG用户名
+  # ⚠️【必填】将 ${MANGA_PASSWORD} 替换为你的实际密码
+  MANGA_PASSWORD: 你的WNACG密码
+```
+
+**重要提示：**
+- 所有路径都需要根据你的实际环境修改
+- 确保这些目录路径存在且有读写权限
+- 群晖NAS用户需要先创建目录（见下一步）
+
+### 第二步：创建必要的目录（群晖NAS用户）
+
+如果你使用的是群晖NAS，需要先创建以下目录：
+
+```bash
+# 在群晖NAS上创建目录（根据你的 BASE_PATH 和 MANGA_DOWNLOAD_PATH 调整）
+mkdir -p /volume1/docker/wnacg-downloader/backend/covers
+mkdir -p /volume1/docker/wnacg-downloader/backend/logs
+mkdir -p /volume1/docker/komga/config
+mkdir -p /volume1/scdata/comic/wnacg
+```
+
+**本地Linux/Mac用户：** 目录会自动创建，无需手动创建。
+
+### 第三步：启动服务
+
+```bash
+# 使用群晖NAS配置（推荐，从Docker Hub拉取预构建镜像）
+docker-compose -f docker-compose.synology.yml up -d
+
+# 或使用本地开发配置（需要本地构建）
+docker-compose up -d
+```
+
+### 第四步：访问应用
+
+启动成功后，访问以下地址：
+
+- **前端界面**：http://localhost:13000（或你的服务器IP:13000）
+- **后端API文档**：http://localhost:18000/docs
+- **Komga阅读器**：http://localhost:25601
+
+### 使用流程
+
+1. **同步收藏夹**：在前端界面点击"同步"按钮，系统会自动登录并爬取你的收藏夹
+2. **下载漫画**：点击漫画卡片上的下载按钮，或使用"下载全部"批量下载
+3. **阅读漫画**：下载完成后，点击"Komga"按钮打开阅读器即可阅读
+
+---
+
 ## 🎯 项目目的
 
 本项目旨在帮助用户：
@@ -112,39 +212,14 @@ git clone <repository-url>
 cd manga
 ```
 
-2. **配置环境变量**（必填）
+2. **修改配置文件**
 
-创建 `.env` 文件并填写您的 WNACG 账号信息：
-```bash
-# 编辑 .env 文件，填写 MANGA_USERNAME 和 MANGA_PASSWORD
-```
+根据你的部署方式，编辑对应的 `docker-compose.yml` 或 `docker-compose.synology.yml` 文件：
 
-`.env` 文件示例：
-```env
-# WNACG 账号信息（必填）
-MANGA_USERNAME=your_wnacg_username
-MANGA_PASSWORD=your_wnacg_password
+- **群晖NAS用户**：修改 `docker-compose.synology.yml` 中的 `MANGA_USERNAME`、`MANGA_PASSWORD` 和所有路径配置
+- **本地开发用户**：修改 `docker-compose.yml` 中的 `MANGA_USERNAME` 和 `MANGA_PASSWORD`
 
-# 发布页地址（可选，默认：https://wn01.link）
-PUBLISH_PAGE_URL=https://wn01.link
-
-# 数据库配置（Docker 部署时使用默认值即可）
-DATABASE_URL=postgresql://manga_user:manga_pass@db:5432/manga_db
-
-# CORS 配置（可选）
-CORS_ORIGINS=["http://localhost:13000"]
-
-# 最近更新搜索时排除的分类/作者名（可选）
-# 支持 JSON 数组格式或逗号分隔格式
-EXCLUDED_CATEGORIES=["优秀","全部","管理分類","書架","书架","我的書架","一般","真人","同人"]
-```
-
-**重要提示：**
-- `.env` 文件已添加到 `.gitignore`，不会被提交到Git仓库
-- `MANGA_USERNAME` 和 `MANGA_PASSWORD` 是必填项，必须填写您的 WNACG 账号信息
-- `EXCLUDED_CATEGORIES`: 在搜索最近更新时排除的分类或作者名。支持两种格式：
-  - JSON数组格式：`["优秀","全部","一般","真人","同人"]`
-  - 逗号分隔格式：`优秀,全部,一般,真人,同人`
+具体修改位置和示例请参考上方的"第一步：修改 Docker Compose 配置文件"。
 
 3. **启动服务**
 ```bash
@@ -169,11 +244,7 @@ pip install -r requirements.txt
 
 2. **配置环境变量**
 ```bash
-# 方式1：使用 .env 文件（推荐）
-cp .env.example .env
-# 编辑 .env 文件，填写实际值
-
-# 方式2：直接设置环境变量
+# 直接设置环境变量
 export DATABASE_URL=postgresql://manga_user:manga_pass@localhost:5432/manga_db
 export MANGA_USERNAME=your_username
 export MANGA_PASSWORD=your_password
@@ -201,16 +272,27 @@ pnpm dev
 
 ### 环境变量
 
-| 变量名 | 说明 | 是否必填 | 示例 |
+**重要提示**：Docker 部署时，请在 `docker-compose.yml` 或 `docker-compose.synology.yml` 文件中直接修改这些变量的值，而不是使用 `.env` 文件。
+
+| 变量名 | 说明 | 是否必填 | 修改位置 | 示例 |
+|--------|------|---------|---------|------|
+| `MANGA_USERNAME` | WNACG 账号用户名 | 是 | `backend` 服务的 `environment` 部分 | `你的WNACG用户名` |
+| `MANGA_PASSWORD` | WNACG 账号密码 | 是 | `backend` 服务的 `environment` 部分 | `你的WNACG密码` |
+| `PUBLISH_PAGE_URL` | WNACG 发布页地址 | 否 | `backend` 服务的 `environment` 部分 | `https://wn01.link` |
+| `DATABASE_URL` | PostgreSQL数据库连接字符串 | 是（Docker 部署时自动配置） | `backend` 服务的 `environment` 部分 | `postgresql://manga_user:manga_pass@db:5432/manga_db` |
+| `DOWNLOAD_DIR` | 下载目录（容器内路径） | 否 | `backend` 服务的 `environment` 部分 | `/app/downloads` |
+| `COVER_DIR` | 封面目录（容器内路径） | 否 | `backend` 服务的 `environment` 部分 | `/app/covers` |
+| `CORS_ORIGINS` | CORS允许的来源（JSON数组） | 否 | `backend` 服务的 `environment` 部分 | `["http://localhost:13000"]` |
+| `EXCLUDED_CATEGORIES` | 最近更新搜索时排除的分类（JSON数组或逗号分隔） | 否 | `backend` 服务的 `environment` 部分 | `["优秀","全部","一般","真人","同人"]` |
+
+### 路径配置（群晖NAS用户）
+
+在 `docker-compose.synology.yml` 文件中，需要修改以下路径配置：
+
+| 配置项 | 说明 | 修改位置 | 示例 |
 |--------|------|---------|------|
-| `MANGA_USERNAME` | WNACG 账号用户名 | 是 | `your_wnacg_username` |
-| `MANGA_PASSWORD` | WNACG 账号密码 | 是 | `your_wnacg_password` |
-| `PUBLISH_PAGE_URL` | WNACG 发布页地址 | 否 | `https://wn01.link` |
-| `DATABASE_URL` | PostgreSQL数据库连接字符串 | 是（Docker 部署时自动配置） | `postgresql://manga_user:manga_pass@db:5432/manga_db` |
-| `DOWNLOAD_DIR` | 下载目录 | 否 | `/app/downloads` |
-| `COVER_DIR` | 封面目录 | 否 | `/app/covers` |
-| `CORS_ORIGINS` | CORS允许的来源（JSON数组） | 否 | `["http://localhost:13000"]` |
-| `EXCLUDED_CATEGORIES` | 最近更新搜索时排除的分类（JSON数组或逗号分隔） | 否 | `["优秀","全部","一般","真人","同人"]` |
+| `MANGA_DOWNLOAD_PATH` | 漫画下载目录路径（与 Komga 共享） | `backend` 和 `komga` 服务的 `volumes` 部分 | `/volume1/scdata/comic/wnacg` |
+| `BASE_PATH` | 基础存储路径（用于配置文件、日志等） | `backend` 和 `komga` 服务的 `volumes` 部分 | `/volume1/docker` |
 
 ### 数据库
 
@@ -354,8 +436,8 @@ backend/
 
 ### 首次使用流程
 
-1. **配置账号**：在 `.env` 文件中填写您的 WNACG 账号信息（`MANGA_USERNAME` 和 `MANGA_PASSWORD`）
-2. **启动服务**：运行 `docker-compose up -d` 启动所有服务
+1. **配置账号**：在 `docker-compose.yml` 或 `docker-compose.synology.yml` 文件中直接修改 `MANGA_USERNAME` 和 `MANGA_PASSWORD` 的值
+2. **启动服务**：运行 `docker-compose up -d`（或 `docker-compose -f docker-compose.synology.yml up -d`）启动所有服务
 3. **同步收藏夹**：在前端界面点击"同步"按钮，系统会自动登录您的 WNACG 账号并爬取收藏夹中的所有漫画信息
 4. **下载漫画**：
    - **单本下载**：点击漫画卡片上的下载按钮，将该漫画加入下载队列
