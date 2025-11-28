@@ -12,5 +12,10 @@ export const mangaApi = {
   async deleteManga(mangaId: string): Promise<ApiResponse<any>> {
     return apiClient.delete(`/api/manga/${mangaId}`)
   },
+
+  // 将漫画添加到网站收藏夹（对应作者文件夹）
+  async addToFavorite(mangaId: string): Promise<ApiResponse<{ success: boolean; message: string }>> {
+    return apiClient.post<{ success: boolean; message: string }>("/api/add-to-favorite", { manga_id: mangaId })
+  },
 }
 

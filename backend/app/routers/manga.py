@@ -40,71 +40,53 @@ def delete_manga(manga_id: str, db: Session = Depends(get_db)):
     return {"success": True, "message": "删除成功"}
 
 
-@router.post("/add-to-collection")
-def add_to_collection(request, db: Session = Depends(get_db)):
-    """添加漫画到收藏夹（对应作者分类）"""
+@router.post("/add-to-favorite")
+def add_to_favorite(request, db: Session = Depends(get_db)):
+    """将漫画添加到网站收藏夹（对应作者文件夹）
+    
+    流程：
+    1. 从漫画URL提取aid（漫画ID）
+    2. 获取收藏分类列表
+    3. 根据作者名匹配对应的分类ID
+    4. 提交收藏表单
+    5. 更新数据库中的is_favorited字段
+    """
     from pydantic import BaseModel
     
-    class AddToCollectionRequest(BaseModel):
-        manga_url: str
-        author: str
-    
-    # 确保request是AddToCollectionRequest类型
-    if not hasattr(request, 'manga_url') or not hasattr(request, 'author'):
-        raise HTTPException(status_code=400, detail="Invalid request format")
-    
-    crawler = MangaCrawler()
+    class AddToFavoriteRequest(BaseModel):
+        manga_id: str  # Manga表的ID
     
     try:
-        if not crawler.login(settings.manga_username, settings.manga_password):
-            raise HTTPException(status_code=401, detail="登录失败")
+        # 查找漫画
+        manga = db.query(Manga).filter(Manga.id == request.manga_id).first()
+        if not manga:
+            raise HTTPException(status_code=404, detail="漫画不存在")
         
-        # 导航到漫画页面
-        crawler.driver.get(request.manga_url)
-        time.sleep(2)
+        # 如果已经收藏，直接返回
+        if manga.is_favorited:
+            return {"success": True, "message": "漫画已收藏到网站"}
         
-        # 查找"加入書架"按钮
-        from selenium.webdriver.common.by import By
-        add_button = crawler.driver.find_element(By.XPATH, "//*[contains(text(), '加入書架')]")
-        add_button.click()
-        time.sleep(1)
+        # 使用收藏服务
+        from app.services.favorite_service import FavoriteService
+        favorite_service = FavoriteService()
         
-        # 选择作者分类
-        # 这里需要根据实际网站UI来实现
-        # 可能需要打开下拉菜单选择分类
-        
-        # 检查是否已存在（基于manga_url去重，不是title）
-        existing = db.query(Manga).filter(Manga.manga_url == request.manga_url).first()
-        if existing:
-            return {"success": True, "message": "漫画已存在于收藏夹中"}
-        
-        # 添加到数据库
-        details = crawler.get_manga_details(request.manga_url)
-        if details:
-            try:
-                manga = Manga(
-                    title=details['title'],
-                    author=request.author,
-                    manga_url=request.manga_url,
-                    page_count=details.get('page_count'),
-                    updated_at=details.get('updated_at'),
-                    cover_image_url=details.get('cover_image_url')
-                )
-                db.add(manga)
+        try:
+            # 执行收藏
+            success = favorite_service.add_to_favorite(manga.manga_url, manga.author)
+            
+            if success:
+                # 更新数据库
+                manga.is_favorited = True
                 db.commit()
-                
-                return {"success": True, "message": "已添加到收藏夹"}
-            except Exception as e:
-                db.rollback()
-                # 处理可能的唯一约束冲突
-                if 'unique' in str(e).lower() or 'duplicate' in str(e).lower():
-                    return {"success": True, "message": "漫画已存在于收藏夹中"}
-                else:
-                    raise
-        else:
-            raise HTTPException(status_code=500, detail="无法获取漫画详情")
+                return {"success": True, "message": "已成功收藏到网站"}
+            else:
+                raise HTTPException(status_code=500, detail="收藏失败，请检查日志")
+        finally:
+            favorite_service.close()
+            
+    except HTTPException:
+        raise
     except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        crawler.close()
+        logger.error(f"收藏漫画失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"收藏失败: {str(e)}")

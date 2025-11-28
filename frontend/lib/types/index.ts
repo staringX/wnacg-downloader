@@ -12,6 +12,7 @@ export interface MangaItem {
   is_downloaded?: boolean
   preview_image_url?: string | null
   is_downloading?: boolean
+  is_favorited?: boolean  // 是否已收藏到网站
 }
 
 export interface AuthorGroup {

@@ -11,6 +11,7 @@ import { useCollection } from "@/features/collection/hooks/use-collection"
 import { useDownload } from "@/features/collection/hooks/use-download"
 import { useSelection } from "@/features/collection/hooks/use-selection"
 import { useDelete } from "@/features/collection/hooks/use-delete"
+import { useFavorite } from "@/features/collection/hooks/use-favorite"
 import type { MangaItem, RecentUpdate } from "@/lib/types"
 
 export default function HomePage() {
@@ -30,6 +31,7 @@ export default function HomePage() {
     setSelectedIds,
   } = useSelection()
   const { handleDelete, handleBatchDelete } = useDelete()
+  const { handleFavorite } = useFavorite()
 
   const totalMangas = useMemo(
     () => authorGroups.reduce((sum, ag) => sum + ag.mangas.length, 0),
@@ -110,6 +112,11 @@ export default function HomePage() {
     reload()
   }
 
+  const handleFavoriteManga = async (manga: MangaItem) => {
+    await handleFavorite(manga)
+    reload()  // 重新加载数据以更新is_favorited状态
+  }
+
   const handleDeleteRecentUpdate = async (manga: RecentUpdate) => {
     // 最近更新的删除逻辑可以在这里实现
     console.log("Delete recent update:", manga)
@@ -156,6 +163,7 @@ export default function HomePage() {
                     onDownload={handleDownloadManga}
                     onDownloadAll={handleDownloadAll}
                     onDelete={handleDeleteManga}
+                    onFavorite={handleFavoriteManga}
                     downloadingIds={downloadingIds}
                     showPreview={showPreview}
                     selectionMode={selectionMode}
@@ -178,6 +186,7 @@ export default function HomePage() {
                     manga={manga}
                     onDownload={handleDownloadManga}
                     onDelete={handleDeleteManga}
+                    onFavorite={handleFavoriteManga}
                     isDownloading={downloadingIds.has(manga.id)}
                     showPreview={showPreview}
                     selectionMode={selectionMode}
@@ -193,6 +202,7 @@ export default function HomePage() {
               refreshTrigger={recentUpdatesKey}
               onDownload={handleDownloadManga}
               onDelete={handleDeleteRecentUpdate}
+              onFavorite={handleFavoriteManga}
               downloadingIds={downloadingIds}
               showPreview={showPreview}
               groupByAuthor={groupByAuthor}

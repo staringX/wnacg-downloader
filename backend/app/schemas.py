@@ -33,6 +33,7 @@ class MangaResponse(MangaBase):
     downloaded_at: Optional[datetime] = None
     cover_image_path: Optional[str] = None
     preview_image_url: Optional[str] = None  # 前端期望的字段名
+    is_favorited: bool = False  # 是否已收藏到网站
     
     class Config:
         from_attributes = True
@@ -40,6 +41,9 @@ class MangaResponse(MangaBase):
     @classmethod
     def from_orm(cls, obj):
         """自定义ORM转换，确保字段映射正确"""
+        # 安全获取 is_favorited 属性（RecentUpdate 模型没有这个字段）
+        is_favorited = getattr(obj, 'is_favorited', False) or False
+        
         # 兼容Pydantic v2和v1
         try:
             # 尝试使用Pydantic v2的model_validate
@@ -48,14 +52,15 @@ class MangaResponse(MangaBase):
                 'title': obj.title,
                 'author': obj.author,
                 'manga_url': obj.manga_url,
-                'file_size': obj.file_size,
+                'file_size': getattr(obj, 'file_size', None),
                 'page_count': obj.page_count,
                 'updated_at': obj.updated_at,
-                'is_downloaded': obj.is_downloaded or False,
-                'downloaded_at': obj.downloaded_at,
+                'is_downloaded': getattr(obj, 'is_downloaded', False) or False,
+                'downloaded_at': getattr(obj, 'downloaded_at', None),
                 'cover_image_url': obj.cover_image_url,
-                'cover_image_path': obj.cover_image_path,
+                'cover_image_path': getattr(obj, 'cover_image_path', None),
                 'preview_image_url': obj.cover_image_url,  # 使用cover_image_url作为预览图
+                'is_favorited': is_favorited,
             })
         except AttributeError:
             # 回退到直接构造
@@ -64,14 +69,15 @@ class MangaResponse(MangaBase):
                 title=obj.title,
                 author=obj.author,
                 manga_url=obj.manga_url,
-                file_size=obj.file_size,
+                file_size=getattr(obj, 'file_size', None),
                 page_count=obj.page_count,
                 updated_at=obj.updated_at,
-                is_downloaded=obj.is_downloaded or False,
-                downloaded_at=obj.downloaded_at,
+                is_downloaded=getattr(obj, 'is_downloaded', False) or False,
+                downloaded_at=getattr(obj, 'downloaded_at', None),
                 cover_image_url=obj.cover_image_url,
-                cover_image_path=obj.cover_image_path,
+                cover_image_path=getattr(obj, 'cover_image_path', None),
                 preview_image_url=obj.cover_image_url,
+                is_favorited=is_favorited,
             )
 
 

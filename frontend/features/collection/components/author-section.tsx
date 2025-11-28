@@ -11,6 +11,7 @@ interface AuthorSectionProps {
   onDownload: (manga: MangaItem) => void
   onDownloadAll: (mangas: MangaItem[]) => void
   onDelete: (manga: MangaItem) => void
+  onFavorite?: (manga: MangaItem) => void  // 收藏回调
   downloadingIds: Set<string>
   showPreview?: boolean
   selectionMode?: boolean
@@ -23,6 +24,7 @@ export function AuthorSection({
   onDownload,
   onDownloadAll,
   onDelete,
+  onFavorite,
   downloadingIds,
   showPreview = false,
   selectionMode = false,
@@ -77,6 +79,7 @@ export function AuthorSection({
                 manga={manga}
                 onDownload={onDownload}
                 onDelete={onDelete}
+                onFavorite={onFavorite}
                 isDownloading={downloadingIds.has(manga.id)}
                 showPreview={showPreview}
                 selectionMode={selectionMode}

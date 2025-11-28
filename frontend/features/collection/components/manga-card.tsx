@@ -2,7 +2,7 @@
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
-import { Download, Check, Clock, HardDrive, Loader2, X, CheckCircle2, BookOpen } from "lucide-react"
+import { Download, Check, Clock, HardDrive, Loader2, X, CheckCircle2, BookOpen, Heart } from "lucide-react"
 import type { MangaItem } from "@/lib/types"
 import Image from "next/image"
 import { useState } from "react"
@@ -11,6 +11,7 @@ interface MangaCardProps {
   manga: MangaItem
   onDownload?: (manga: MangaItem) => void
   onDelete?: (manga: MangaItem) => void
+  onFavorite?: (manga: MangaItem) => void  // 收藏回调
   isDownloading?: boolean
   showPreview?: boolean
   selectionMode?: boolean
@@ -22,6 +23,7 @@ export function MangaCard({
   manga,
   onDownload,
   onDelete,
+  onFavorite,
   isDownloading,
   showPreview = false,
   selectionMode = false,
@@ -30,6 +32,8 @@ export function MangaCard({
 }: MangaCardProps) {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const isDownloaded = !!manga.downloaded_at || manga.is_downloaded
+  const isFavorited = manga.is_favorited ?? false  // 是否已收藏到网站
+  const isNotFavorited = !isFavorited && isDownloaded  // 已下载但未收藏到网站
 
   const formatFileSize = (bytes: number | null) => {
     if (!bytes) return "N/A"
@@ -85,8 +89,15 @@ export function MangaCard({
         )}
 
         {/* Left: Green check for downloaded status - floating on top-left corner */}
-        {!selectionMode && isDownloaded && !isDownloading && (
+        {!selectionMode && isDownloaded && !isDownloading && isFavorited && (
           <div className="absolute -top-1.5 -left-1.5 w-4 h-4 rounded-full bg-green-500 flex items-center justify-center shadow-md z-10">
+            <Check className="w-2.5 h-2.5 text-white" />
+          </div>
+        )}
+
+        {/* Left: Yellow/orange indicator for downloaded but not favorited - floating on top-left corner */}
+        {!selectionMode && isNotFavorited && !isDownloading && (
+          <div className="absolute -top-1.5 -left-1.5 w-4 h-4 rounded-full bg-yellow-500 flex items-center justify-center shadow-md z-10" title="已下载但未收藏到网站">
             <Check className="w-2.5 h-2.5 text-white" />
           </div>
         )}
@@ -112,6 +123,7 @@ export function MangaCard({
           </Button>
         )}
 
+        {/* 未下载时显示下载按钮 */}
         {!selectionMode && !isDownloaded && onDownload && (
           <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-10">
             <Button
@@ -124,6 +136,23 @@ export function MangaCard({
               className="h-12 w-12 rounded-full bg-black/50 backdrop-blur-md hover:bg-black/60 text-white shadow-lg hover:scale-110 active:scale-95 transition-all duration-200 border border-white/20"
             >
               {isDownloading ? <Loader2 className="w-6 h-6 animate-spin" /> : <Download className="w-6 h-6" />}
+            </Button>
+          </div>
+        )}
+
+        {/* 已下载但未收藏时显示收藏按钮 */}
+        {!selectionMode && isNotFavorited && onFavorite && (
+          <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-10">
+            <Button
+              onClick={(e) => {
+                e.stopPropagation()
+                onFavorite(manga)
+              }}
+              size="icon"
+              className="h-12 w-12 rounded-full bg-pink-500/80 backdrop-blur-md hover:bg-pink-600 text-white shadow-lg hover:scale-110 active:scale-95 transition-all duration-200 border border-white/20"
+              title="收藏到网站（对应作者文件夹）"
+            >
+              <Heart className="w-6 h-6" />
             </Button>
           </div>
         )}

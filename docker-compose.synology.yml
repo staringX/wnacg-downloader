@@ -6,9 +6,21 @@
 #   - 无需本地构建，直接拉取预构建的镜像
 #   - 请确保已配置.env文件（环境变量）
 #
-# 共通变量配置（修改此处即可全局生效）：
+# 前提设置
+#   - 根据想要设置的目录在NAS上创建文件夹，如：
+#     - /volume1/docker/wnacg-downloader/backend/downloads
+#     - /volume1/docker/wnacg-downloader/backend/covers
+#     - /volume1/docker/wnacg-downloader/backend/logs
+#     - /volume1/docker/komga/config
+#     - /volume1/scdata/comic/wnacg
+#
+# 必要变量设置 （必须设置的变量）
+#   - MANGA_USERNAME: 漫画网站账号用户名
+#   - MANGA_PASSWORD: 漫画网站账号密码
 #   - BASE_PATH: 基础存储路径（用于配置文件、日志等）
 #   - MANGA_DOWNLOAD_PATH: 漫画下载目录路径（与 Komga 共享）
+#
+# 可选变量配置（可不设置，默认值已提供）：
 #   - DB_USER: 数据库用户名
 #   - DB_PASSWORD: 数据库密码
 #   - DB_NAME: 数据库名称
@@ -17,14 +29,6 @@
 #   - BACKEND_PORT: 后端API对外端口（默认：18000）
 #   - FRONTEND_PORT: 前端Web对外端口（默认：13000）
 #   - KOMGA_PORT: Komga对外端口（默认：25601）
-
-x-common-vars: &common-vars
-  BASE_PATH: ${BASE_PATH:-/volume1/docker}
-  MANGA_DOWNLOAD_PATH: ${MANGA_DOWNLOAD_PATH:-/scdata/commic/wnacg}
-  DB_USER: ${DB_USER:-manga_user}
-  DB_PASSWORD: ${DB_PASSWORD:-manga_pass}
-  DB_NAME: ${DB_NAME:-manga_db}
-  NETWORK_NAME: ${NETWORK_NAME:-wnacg-network}
 
 x-common-restart: &common-restart
   restart: unless-stopped
@@ -57,7 +61,9 @@ services:
       # 使用PostgreSQL数据库
       # 注意：容器间通信使用容器内部端口 5432，不是对外暴露的端口
       DATABASE_URL: postgresql://${DB_USER:-manga_user}:${DB_PASSWORD:-manga_pass}@db:5432/${DB_NAME:-manga_db}
+      # ⚠️【必填】漫画网站账号用户名
       MANGA_USERNAME: ${MANGA_USERNAME}
+      # ⚠️【必填】漫画网站账号密码
       MANGA_PASSWORD: ${MANGA_PASSWORD}
       PUBLISH_PAGE_URL: ${PUBLISH_PAGE_URL:-https://wn01.link}
       # 下载目录指向 Komga 的漫画库目录，实现自动同步
@@ -68,11 +74,11 @@ services:
       # 最近更新搜索时排除的分类/作者名（JSON数组格式或逗号分隔）
       EXCLUDED_CATEGORIES: ${EXCLUDED_CATEGORIES:-["优秀","全部","管理分類","書架","书架","我的書架","一般","真人","同人"]}
     volumes:
-      # 下载的漫画 - 与 Komga 共享同一个目录，下载后自动出现在 Komga 中
-      - ${MANGA_DOWNLOAD_PATH:-/scdata/commic/wnacg}:/app/downloads
-      # 封面图片
+      # ⚠️【必填】下载的漫画 - 与 Komga 共享同一个目录，下载后自动出现在 Komga 中
+      - ${MANGA_DOWNLOAD_PATH:-/volume1/scdata/comic/wnacg}:/app/downloads
+      # ⚠️【必填】封面图片
       - ${BASE_PATH:-/volume1/docker}/wnacg-downloader/backend/covers:/app/covers
-      # 日志文件
+      # ⚠️【必填】日志文件
       - ${BASE_PATH:-/volume1/docker}/wnacg-downloader/backend/logs:/app/logs
     ports:
       - "${BACKEND_PORT:-18000}:8000"
@@ -107,10 +113,10 @@ services:
       # 服务器端口（容器内部端口，Komga 默认使用 25600）
       - KOMGA_SERVER_PORT=25600
     volumes:
-      # Komga 配置文件目录
+      # ⚠️【必填】Komga 配置文件目录
       - ${BASE_PATH:-/volume1/docker}/komga/config:/config
-      # Komga 漫画库目录 - 与 backend 的下载目录共享
-      - ${MANGA_DOWNLOAD_PATH:-/scdata/commic/wnacg}:/data
+      # ⚠️【必填】Komga 漫画库目录 - 与 backend 的下载目录共享
+      - ${MANGA_DOWNLOAD_PATH:-/volume1/scdata/comic/wnacg}:/data
     networks:
       - ${NETWORK_NAME:-wnacg-network}
 

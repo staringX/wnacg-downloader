@@ -1,16 +1,19 @@
 // 最近更新组件
 "use client"
 
-import { useEffect, useMemo } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { MangaCard } from "@/features/collection/components/manga-card"
 import { AuthorSection } from "@/features/collection/components/author-section"
 import { Sparkles } from "lucide-react"
+import { recentUpdatesApi } from "@/lib/api"
+import { useToast } from "@/hooks/use-toast"
 import type { RecentUpdate, AuthorGroup, MangaItem } from "@/lib/types"
 import { useRecentUpdates } from "../hooks/use-recent-updates"
 
 interface RecentUpdatesProps {
   onDownload: (manga: RecentUpdate) => void
   onDelete: (manga: RecentUpdate) => void
+  onFavorite?: (manga: RecentUpdate) => void  // 收藏回调
   downloadingIds: Set<string>
   showPreview?: boolean
   refreshTrigger?: number
@@ -22,6 +25,7 @@ interface RecentUpdatesProps {
 export function RecentUpdates({
   onDownload,
   onDelete,
+  onFavorite,
   downloadingIds,
   showPreview = false,
   refreshTrigger = 0,
@@ -30,6 +34,64 @@ export function RecentUpdates({
   onDownloadAllRef,
 }: RecentUpdatesProps) {
   const { updates, isLoading, pendingUpdates, authorGroups, reload } = useRecentUpdates(refreshTrigger)
+  const { toast } = useToast()
+  const [localDownloadingIds, setLocalDownloadingIds] = useState<Set<string>>(new Set())
+
+  // 处理从最近更新下载（使用新的API）
+  const handleDownloadFromUpdate = async (update: RecentUpdate) => {
+    // 检查是否正在下载
+    if (downloadingIds.has(update.id) || localDownloadingIds.has(update.id)) {
+      toast({
+        title: "下载进行中",
+        description: "该漫画正在下载中，请等待完成",
+        variant: "default",
+      })
+      return
+    }
+
+    try {
+      setLocalDownloadingIds((prev) => new Set(prev).add(update.id))
+
+      const response = await recentUpdatesApi.downloadFromUpdate(update.id)
+
+      if (response.success && response.data) {
+        const taskId = response.data.task_id
+        if (taskId) {
+          toast({
+            title: "下载已开始",
+            description: `开始下载: ${update.title}`,
+          })
+          // 重新加载数据
+          reload()
+        } else {
+          toast({
+            title: "下载完成",
+            description: update.title + " 已下载",
+          })
+        }
+      } else {
+        throw new Error(response.error || "下载失败")
+      }
+    } catch (error) {
+      console.error("Download from update error:", error)
+      toast({
+        title: "下载失败",
+        description: error instanceof Error ? error.message : "请稍后重试",
+        variant: "destructive",
+      })
+    } finally {
+      setLocalDownloadingIds((prev) => {
+        const next = new Set(prev)
+        next.delete(update.id)
+        return next
+      })
+    }
+  }
+
+  // 合并本地和全局的下载状态
+  const allDownloadingIds = useMemo(() => {
+    return new Set([...downloadingIds, ...localDownloadingIds])
+  }, [downloadingIds, localDownloadingIds])
 
   // 通知父组件待下载数量变化
   useEffect(() => {
@@ -44,16 +106,16 @@ export function RecentUpdates({
       onDownloadAllRef.current = async () => {
         if (pendingUpdates.length === 0) return
         for (const update of pendingUpdates) {
-          await onDownload(update)
+          await handleDownloadFromUpdate(update)
         }
       }
     }
-  }, [pendingUpdates, onDownload, onDownloadAllRef])
+  }, [pendingUpdates, onDownloadAllRef])
 
 
   const handleDownloadAllForAuthor = async (mangas: MangaItem[]) => {
     for (const manga of mangas) {
-      await onDownload(manga as RecentUpdate)
+      await handleDownloadFromUpdate(manga as RecentUpdate)
     }
   }
 
@@ -118,10 +180,11 @@ export function RecentUpdates({
               <AuthorSection
                 key={authorGroup.author}
                 authorGroup={authorGroup}
-                onDownload={(manga: MangaItem) => onDownload(manga as RecentUpdate)}
+                onDownload={(manga: MangaItem) => handleDownloadFromUpdate(manga as RecentUpdate)}
                 onDownloadAll={handleDownloadAllForAuthor}
                 onDelete={(manga: MangaItem) => onDelete(manga as RecentUpdate)}
-                downloadingIds={downloadingIds}
+                onFavorite={onFavorite ? (manga: MangaItem) => onFavorite(manga as RecentUpdate) : undefined}
+                downloadingIds={allDownloadingIds}
                 showPreview={showPreview}
                 selectionMode={false}
                 selectedIds={new Set()}
@@ -141,9 +204,10 @@ export function RecentUpdates({
               <MangaCard
                 key={update.id}
                 manga={update}
-                onDownload={(manga: MangaItem) => onDownload(manga as RecentUpdate)}
+                onDownload={(manga: MangaItem) => handleDownloadFromUpdate(manga as RecentUpdate)}
                 onDelete={(manga: MangaItem) => onDelete(manga as RecentUpdate)}
-                isDownloading={downloadingIds.has(update.id)}
+                onFavorite={onFavorite ? (manga: MangaItem) => onFavorite(manga as RecentUpdate) : undefined}
+                isDownloading={allDownloadingIds.has(update.id)}
                 showPreview={showPreview}
               />
             ))}
