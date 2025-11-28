@@ -7,9 +7,7 @@ from app.database import Base, engine, SessionLocal
 from app.utils.logger import logger
 from app import models  # 🔥 必须导入models，否则Base.metadata找不到表
 from app.services.task_manager import TaskManager
-
-# 创建数据库表
-Base.metadata.create_all(bind=engine)
+from app.utils.migration import run_migrations
 
 # 启动日志
 logger.info("=" * 60)
@@ -18,11 +16,14 @@ logger.info(f"数据库: {settings.database_url}")
 logger.info("=" * 60)
 
 
-def cleanup_tasks_on_startup():
-    """启动时清理任务"""
+def init_on_startup():
+    """启动时初始化操作"""
     logger.info("执行启动初始化...")
     
-    # 清理过期的任务（因Docker重启等原因中断的任务）
+    # 1. 首先运行数据库自动迁移（类似于 JPA 的自动迁移）
+    run_migrations()
+    
+    # 2. 清理过期的任务（因Docker重启等原因中断的任务）
     # 启动时清理所有pending/running任务，因为重启后这些任务肯定都中断了
     db = SessionLocal()
     try:
@@ -45,7 +46,7 @@ def cleanup_tasks_on_startup():
 async def lifespan(app: FastAPI):
     """应用生命周期管理"""
     # 启动时的初始化操作
-    cleanup_tasks_on_startup()
+    init_on_startup()
     
     yield  # 应用运行
     
@@ -63,7 +64,7 @@ app = FastAPI(
 @app.on_event("startup")
 async def startup_event():
     """启动事件（备用方案）"""
-    cleanup_tasks_on_startup()
+    init_on_startup()
 
 # CORS配置 - 允许所有来源
 app.add_middleware(
