@@ -35,8 +35,12 @@ def run_migrations():
         
         logger.info("开始检查数据库迁移...")
         
-        # 检查迁移脚本目录
+        # 检查迁移脚本目录，如果不存在则创建
         versions_dir = os.path.join(backend_dir, "migrations", "versions")
+        if not os.path.exists(versions_dir):
+            os.makedirs(versions_dir, exist_ok=True)
+            logger.info(f"创建迁移脚本目录: {versions_dir}")
+        
         has_migrations = os.path.exists(versions_dir) and len([f for f in os.listdir(versions_dir) if f.endswith('.py') and f != '__init__.py']) > 0
         
         if not has_migrations:
