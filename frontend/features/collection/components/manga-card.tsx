@@ -17,6 +17,7 @@ interface MangaCardProps {
   selectionMode?: boolean
   isSelected?: boolean
   onToggleSelect?: (manga: MangaItem) => void
+  allowFavoriteWhenNotDownloaded?: boolean  // 是否允许在未下载时显示收藏按钮（用于最近更新列表，我的收藏列表不传递onFavorite）
 }
 
 export function MangaCard({
@@ -29,11 +30,15 @@ export function MangaCard({
   selectionMode = false,
   isSelected = false,
   onToggleSelect,
+  allowFavoriteWhenNotDownloaded = false,  // 默认只在已下载时显示收藏按钮
 }: MangaCardProps) {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const isDownloaded = !!manga.downloaded_at || manga.is_downloaded
   const isFavorited = manga.is_favorited ?? false  // 是否已收藏到网站
-  const isNotFavorited = !isFavorited && isDownloaded  // 已下载但未收藏到网站
+  // 如果传递了onFavorite（最近更新列表），只要未收藏就显示收藏按钮；我的收藏列表不传递onFavorite，所以不会显示收藏按钮
+  const isNotFavorited = allowFavoriteWhenNotDownloaded 
+    ? !isFavorited  // 最近更新列表：只要未收藏就显示
+    : false  // 我的收藏列表不传递onFavorite，所以这里不会执行
 
   const formatFileSize = (bytes: number | null) => {
     if (!bytes) return "N/A"
@@ -140,19 +145,20 @@ export function MangaCard({
           </div>
         )}
 
-        {/* 已下载但未收藏时显示收藏按钮 */}
+        {/* 收藏按钮：在最近更新列表中，只要未收藏就显示；在我的收藏列表中，只有已下载但未收藏才显示 */}
+        {/* 如果未下载，收藏按钮显示在右上角（避免与下载按钮重叠） */}
         {!selectionMode && isNotFavorited && onFavorite && (
-          <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-10">
+          <div className={`absolute ${!isDownloaded && allowFavoriteWhenNotDownloaded ? 'top-2 right-2' : 'inset-0 flex items-center justify-center'} opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-10`}>
             <Button
               onClick={(e) => {
                 e.stopPropagation()
                 onFavorite(manga)
               }}
               size="icon"
-              className="h-12 w-12 rounded-full bg-pink-500/80 backdrop-blur-md hover:bg-pink-600 text-white shadow-lg hover:scale-110 active:scale-95 transition-all duration-200 border border-white/20"
+              className={`${!isDownloaded && allowFavoriteWhenNotDownloaded ? 'h-8 w-8' : 'h-12 w-12'} rounded-full bg-pink-500/80 backdrop-blur-md hover:bg-pink-600 text-white shadow-lg hover:scale-110 active:scale-95 transition-all duration-200 border border-white/20`}
               title="收藏到网站（对应作者文件夹）"
             >
-              <Heart className="w-6 h-6" />
+              <Heart className={!isDownloaded && allowFavoriteWhenNotDownloaded ? "w-4 h-4" : "w-6 h-6"} />
             </Button>
           </div>
         )}

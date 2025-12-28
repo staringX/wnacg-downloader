@@ -163,7 +163,6 @@ export default function HomePage() {
                     onDownload={handleDownloadManga}
                     onDownloadAll={handleDownloadAll}
                     onDelete={handleDeleteManga}
-                    onFavorite={handleFavoriteManga}
                     downloadingIds={downloadingIds}
                     showPreview={showPreview}
                     selectionMode={selectionMode}
@@ -186,7 +185,6 @@ export default function HomePage() {
                     manga={manga}
                     onDownload={handleDownloadManga}
                     onDelete={handleDeleteManga}
-                    onFavorite={handleFavoriteManga}
                     isDownloading={downloadingIds.has(manga.id)}
                     showPreview={showPreview}
                     selectionMode={selectionMode}

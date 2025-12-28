@@ -189,6 +189,7 @@ export function RecentUpdates({
                 selectionMode={false}
                 selectedIds={new Set()}
                 onToggleSelect={undefined}
+                allowFavoriteWhenNotDownloaded={true}  // 在最近更新列表中，允许未下载时也显示收藏按钮
               />
             ))}
           </div>
@@ -209,6 +210,7 @@ export function RecentUpdates({
                 onFavorite={onFavorite ? (manga: MangaItem) => onFavorite(manga as RecentUpdate) : undefined}
                 isDownloading={allDownloadingIds.has(update.id)}
                 showPreview={showPreview}
+                allowFavoriteWhenNotDownloaded={true}  // 在最近更新列表中，允许未下载时也显示收藏按钮
               />
             ))}
           </div>

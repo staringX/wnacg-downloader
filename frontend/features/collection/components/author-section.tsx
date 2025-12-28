@@ -17,6 +17,7 @@ interface AuthorSectionProps {
   selectionMode?: boolean
   selectedIds?: Set<string>
   onToggleSelect?: (manga: MangaItem) => void
+  allowFavoriteWhenNotDownloaded?: boolean  // 是否允许在未下载时显示收藏按钮（用于最近更新列表）
 }
 
 export function AuthorSection({
@@ -30,6 +31,7 @@ export function AuthorSection({
   selectionMode = false,
   selectedIds = new Set(),
   onToggleSelect,
+  allowFavoriteWhenNotDownloaded = false,
 }: AuthorSectionProps) {
   const [isExpanded, setIsExpanded] = useState(true)
 
@@ -85,6 +87,7 @@ export function AuthorSection({
                 selectionMode={selectionMode}
                 isSelected={selectedIds.has(manga.id)}
                 onToggleSelect={onToggleSelect}
+                allowFavoriteWhenNotDownloaded={allowFavoriteWhenNotDownloaded}
               />
             ))}
           </div>
