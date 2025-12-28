@@ -20,6 +20,7 @@ import {
   Users,
   RefreshCw,
   ExternalLink,
+  FileCheck,
 } from "lucide-react"
 
 interface MobileMenuProps {
@@ -37,6 +38,8 @@ interface MobileMenuProps {
   currentTab: "collection" | "updates"
   groupByAuthor: boolean
   onGroupByAuthorChange: (value: boolean) => void
+  onUpdateDownloadStatus: () => void
+  isUpdatingStatus: boolean
 }
 
 export function MobileMenu({
@@ -54,6 +57,8 @@ export function MobileMenu({
   currentTab,
   groupByAuthor,
   onGroupByAuthorChange,
+  onUpdateDownloadStatus,
+  isUpdatingStatus,
 }: MobileMenuProps) {
   // 跳转到 Komga - 直接打开 Komga 的完整 URL（避免通过 Next.js 代理导致的 SPA 路径问题）
   const handleOpenKomga = () => {
@@ -139,6 +144,18 @@ export function MobileMenu({
               删除 ({selectedCount})
             </Button>
           )}
+
+          {/* 更新下载状态按钮 */}
+          <Button
+            onClick={onUpdateDownloadStatus}
+            disabled={isUpdatingStatus}
+            variant="outline"
+            className="w-full justify-start h-12 text-base glass-card hover:shadow-lg transition-all bg-transparent"
+            title="扫描本地下载文件并更新数据库中的下载状态"
+          >
+            <FileCheck className={`w-5 h-5 mr-3 ${isUpdatingStatus ? "animate-spin" : ""}`} />
+            {isUpdatingStatus ? "更新中..." : "更新状态"}
+          </Button>
 
           {/* 统一的同步按钮 */}
           <Button

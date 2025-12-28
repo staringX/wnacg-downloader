@@ -5,7 +5,7 @@ import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Switch } from "@/components/ui/switch"
 import { Label } from "@/components/ui/label"
-import { Download, ImageIcon, CheckCircle2, X, Users, RefreshCw, ExternalLink } from "lucide-react"
+import { Download, ImageIcon, CheckCircle2, X, Users, RefreshCw, ExternalLink, FileCheck } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { syncApi } from "@/lib/api"
 import { useTaskStatus, useRunningTasks } from "@/hooks/use-task-status"
@@ -55,6 +55,7 @@ export function Header({
   const [lastScrollY, setLastScrollY] = useState(0)
   const [isVisible, setIsVisible] = useState(true)
   const [isMobile, setIsMobile] = useState(false)
+  const [isUpdatingStatus, setIsUpdatingStatus] = useState(false)
   const { toast } = useToast()
 
   // 同步收藏夹相关状态
@@ -199,6 +200,38 @@ export function Header({
     }
   }
 
+  // 更新下载状态（扫描本地文件并同步数据库）
+  const handleUpdateDownloadStatus = async () => {
+    if (isUpdatingStatus) {
+      return
+    }
+
+    setIsUpdatingStatus(true)
+    try {
+      const response = await syncApi.updateDownloadStatus()
+      if (response.success && response.data) {
+        const data = response.data
+        toast({
+          title: "更新完成",
+          description: `扫描 ${data.scanned_files} 个文件，匹配 ${data.matched_count} 个漫画，新标记 ${data.marked_downloaded} 个为已下载，重置 ${data.marked_not_downloaded} 个丢失文件的状态`,
+        })
+        // 触发数据刷新
+        onSyncComplete()
+      } else {
+        throw new Error(response.error || "更新失败")
+      }
+    } catch (error) {
+      console.error("Update download status error:", error)
+      toast({
+        title: "更新失败",
+        description: error instanceof Error ? error.message : "请稍后重试",
+        variant: "destructive",
+      })
+    } finally {
+      setIsUpdatingStatus(false)
+    }
+  }
+
   // 检测是否为移动端
   useEffect(() => {
     const checkMobile = () => {
@@ -320,6 +353,18 @@ export function Header({
                 </Button>
               )}
 
+              {/* 更新下载状态按钮 */}
+              <Button
+                onClick={handleUpdateDownloadStatus}
+                disabled={isUpdatingStatus}
+                variant="outline"
+                className="glass-card hover:shadow-lg transition-all bg-transparent"
+                title="扫描本地下载文件并更新数据库中的下载状态"
+              >
+                <FileCheck className={`w-4 h-4 mr-2 ${isUpdatingStatus ? "animate-spin" : ""}`} />
+                {isUpdatingStatus ? "更新中..." : "更新状态"}
+              </Button>
+
               {/* 统一的同步按钮 */}
               <Button
                 onClick={handleSync}
@@ -375,6 +420,8 @@ export function Header({
           currentTab={currentTab}
           groupByAuthor={groupByAuthor}
           onGroupByAuthorChange={onGroupByAuthorChange}
+          onUpdateDownloadStatus={handleUpdateDownloadStatus}
+          isUpdatingStatus={isUpdatingStatus}
         />
       </div>
     </>

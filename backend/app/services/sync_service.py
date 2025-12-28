@@ -1,7 +1,8 @@
 """同步业务服务"""
 from sqlalchemy.orm import Session
 from pathlib import Path
-from typing import Tuple, List
+from typing import Tuple, List, Dict
+from datetime import datetime
 from app.database import SessionLocal
 from app.models import Manga
 from app.crawler.base import MangaCrawler
@@ -91,6 +92,181 @@ class SyncService:
         logger.info("=" * 60)
         
         return verified_count, fixed_count, missing_files
+    
+    @staticmethod
+    def scan_and_update_local_files(db: Session) -> Dict[str, int]:
+        """
+        扫描本地下载目录，更新数据库中的下载状态
+        
+        功能：
+        1. 扫描下载目录中的所有CBZ文件
+        2. 根据文件名和作者文件夹匹配数据库中的漫画
+        3. 更新数据库中的is_downloaded状态和文件路径
+        4. 同时检查数据库标记为已下载但文件不存在的记录，重置其状态
+        
+        Returns:
+            dict: {
+                'scanned_files': 扫描到的CBZ文件数量,
+                'matched_count': 匹配并更新的漫画数量,
+                'marked_downloaded': 新标记为已下载的数量,
+                'marked_not_downloaded': 重置为未下载的数量,
+                'unmatched_files': 未匹配到数据库记录的文件数量
+            }
+        """
+        logger.info("=" * 60)
+        logger.info("开始扫描本地下载文件并更新数据库状态...")
+        logger.info("=" * 60)
+        
+        download_dir = Path(settings.download_dir)
+        if not download_dir.exists():
+            logger.warning(f"下载目录不存在: {download_dir}")
+            return {
+                'scanned_files': 0,
+                'matched_count': 0,
+                'marked_downloaded': 0,
+                'marked_not_downloaded': 0,
+                'unmatched_files': 0
+            }
+        
+        # 第一步：扫描所有CBZ文件
+        cbz_files = []
+        for author_dir in download_dir.iterdir():
+            if not author_dir.is_dir():
+                continue
+            
+            author_name = author_dir.name
+            for cbz_file in author_dir.glob("*.cbz"):
+                if cbz_file.is_file():
+                    cbz_files.append({
+                        'path': str(cbz_file),
+                        'author': author_name,
+                        'title': cbz_file.stem,  # 文件名（不含扩展名）
+                        'file_size': cbz_file.stat().st_size
+                    })
+        
+        logger.info(f"扫描到 {len(cbz_files)} 个CBZ文件")
+        
+        # 第二步：匹配数据库记录并更新
+        # 注意：下载时会对标题和作者进行清理（移除特殊字符，空格替换为下划线）
+        # 所以需要将数据库中的原始标题和作者应用相同的清理逻辑来匹配
+        
+        def normalize_title_for_filename(title: str) -> str:
+            """清理标题用于文件名（与下载逻辑一致）"""
+            # 移除所有非字母数字字符（除了空格、连字符、下划线）
+            safe_title = "".join(c for c in title if c.isalnum() or c in (' ', '-', '_')).strip()
+            # 将空格替换为下划线
+            safe_title = safe_title.replace(' ', '_')
+            return safe_title
+        
+        def normalize_author_for_dirname(author: str) -> str:
+            """清理作者名用于文件夹名（与下载逻辑一致）"""
+            # 移除所有非字母数字字符（除了空格、连字符、下划线、括号）
+            safe_author = "".join(c for c in author if c.isalnum() or c in (' ', '-', '_', '（', '）', '(', ')')).strip()
+            # 将空格替换为下划线
+            safe_author = safe_author.replace(' ', '_') if safe_author else "未知作者"
+            return safe_author
+        
+        matched_count = 0
+        marked_downloaded = 0
+        marked_not_downloaded = 0
+        unmatched_files = []
+        
+        # 获取所有漫画记录
+        all_mangas = db.query(Manga).all()
+        
+        # 为每个漫画预计算清理后的标题和作者（用于匹配）
+        manga_normalized_map = {}
+        for manga in all_mangas:
+            normalized_title = normalize_title_for_filename(manga.title)
+            normalized_author = normalize_author_for_dirname(manga.author)
+            manga_normalized_map[manga.id] = {
+                'manga': manga,
+                'normalized_title': normalized_title,
+                'normalized_author': normalized_author
+            }
+        
+        for cbz_info in cbz_files:
+            cbz_path = cbz_info['path']
+            cbz_author_dir = cbz_info['author']  # 文件夹名（已清理）
+            cbz_title_file = cbz_info['title']  # 文件名（不含扩展名，已清理）
+            cbz_file_size = cbz_info['file_size']
+            
+            # 查找匹配的漫画：将数据库中的标题和作者应用相同的清理逻辑
+            matched_manga = None
+            for manga_id, normalized_info in manga_normalized_map.items():
+                if (normalized_info['normalized_author'] == cbz_author_dir and 
+                    normalized_info['normalized_title'] == cbz_title_file):
+                    matched_manga = normalized_info['manga']
+                    break
+            
+            if matched_manga:
+                matched_count += 1
+                
+                # 检查是否需要更新
+                needs_update = False
+                
+                if not matched_manga.is_downloaded:
+                    needs_update = True
+                    marked_downloaded += 1
+                    logger.info(f"✓ 标记为已下载: {matched_manga.title[:50]} (作者: {matched_manga.author[:30]})")
+                
+                if matched_manga.cbz_file_path != cbz_path:
+                    needs_update = True
+                
+                if needs_update:
+                    matched_manga.is_downloaded = True
+                    matched_manga.download_status = "completed"
+                    matched_manga.cbz_file_path = cbz_path
+                    matched_manga.file_size = cbz_file_size
+                    if not matched_manga.downloaded_at:
+                        matched_manga.downloaded_at = datetime.now()
+                    matched_manga.downloaded_pages = matched_manga.page_count or 0
+            else:
+                unmatched_files.append({
+                    'path': cbz_path,
+                    'author': cbz_author_dir,
+                    'title': cbz_title_file
+                })
+                logger.debug(f"⚠ 未匹配到数据库记录: {cbz_author_dir}/{cbz_title_file}")
+        
+        # 第三步：检查数据库标记为已下载但文件不存在的记录
+        downloaded_mangas = db.query(Manga).filter(Manga.is_downloaded == True).all()
+        for manga in downloaded_mangas:
+            if manga.cbz_file_path:
+                cbz_file = Path(manga.cbz_file_path)
+                if not cbz_file.exists() or not cbz_file.is_file():
+                    # 文件不存在，重置状态
+                    logger.warning(f"✗ 文件不存在，重置状态: {manga.title[:50]} - {manga.cbz_file_path}")
+                    manga.is_downloaded = False
+                    manga.download_status = "not_started"
+                    manga.downloaded_pages = 0
+                    manga.cbz_file_path = None
+                    manga.downloaded_at = None
+                    manga.file_size = None
+                    marked_not_downloaded += 1
+        
+        # 提交所有更改
+        if matched_count > 0 or marked_not_downloaded > 0:
+            db.commit()
+            logger.info(f"已更新 {matched_count} 个匹配记录")
+            if marked_downloaded > 0:
+                logger.info(f"  其中 {marked_downloaded} 个新标记为已下载")
+            if marked_not_downloaded > 0:
+                logger.info(f"  重置了 {marked_not_downloaded} 个丢失文件的下载状态")
+        
+        logger.info("=" * 60)
+        logger.info(f"扫描完成: 扫描 {len(cbz_files)} 个文件, 匹配 {matched_count} 个, "
+                   f"新标记 {marked_downloaded} 个, 重置 {marked_not_downloaded} 个, "
+                   f"未匹配 {len(unmatched_files)} 个")
+        logger.info("=" * 60)
+        
+        return {
+            'scanned_files': len(cbz_files),
+            'matched_count': matched_count,
+            'marked_downloaded': marked_downloaded,
+            'marked_not_downloaded': marked_not_downloaded,
+            'unmatched_files': len(unmatched_files)
+        }
     
     @staticmethod
     def execute_sync_task(task_id: str, db: Session = None):

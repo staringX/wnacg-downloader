@@ -21,6 +21,16 @@ class VerifyResponse(BaseModel):
     missing_files: List[str]
 
 
+class UpdateDownloadStatusResponse(BaseModel):
+    success: bool
+    message: str
+    scanned_files: int
+    matched_count: int
+    marked_downloaded: int
+    marked_not_downloaded: int
+    unmatched_files: int
+
+
 @router.post("/verify-files", response_model=VerifyResponse)
 def verify_files(db: Session = Depends(get_db)):
     """
@@ -51,6 +61,48 @@ def verify_files(db: Session = Depends(get_db)):
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"文件验证失败: {str(e)}")
+
+
+@router.post("/update-download-status", response_model=UpdateDownloadStatusResponse)
+def update_download_status(db: Session = Depends(get_db)):
+    """
+    扫描本地下载目录并更新数据库中的下载状态
+    
+    功能：
+    1. 扫描下载目录中的所有CBZ文件
+    2. 根据文件名和作者文件夹匹配数据库中的漫画
+    3. 更新数据库中的is_downloaded状态和文件路径
+    4. 同时检查数据库标记为已下载但文件不存在的记录，重置其状态
+    
+    返回：
+    - scanned_files: 扫描到的CBZ文件数量
+    - matched_count: 匹配并更新的漫画数量
+    - marked_downloaded: 新标记为已下载的数量
+    - marked_not_downloaded: 重置为未下载的数量
+    - unmatched_files: 未匹配到数据库记录的文件数量
+    """
+    try:
+        result = SyncService.scan_and_update_local_files(db)
+        
+        message = (
+            f"扫描完成：扫描到 {result['scanned_files']} 个文件，"
+            f"匹配 {result['matched_count']} 个漫画，"
+            f"新标记 {result['marked_downloaded']} 个为已下载，"
+            f"重置 {result['marked_not_downloaded']} 个丢失文件的状态"
+        )
+        
+        return UpdateDownloadStatusResponse(
+            success=True,
+            message=message,
+            scanned_files=result['scanned_files'],
+            matched_count=result['matched_count'],
+            marked_downloaded=result['marked_downloaded'],
+            marked_not_downloaded=result['marked_not_downloaded'],
+            unmatched_files=result['unmatched_files']
+        )
+    except Exception as e:
+        logger.error(f"更新下载状态失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"更新下载状态失败: {str(e)}")
 
 
 @router.post("/sync", response_model=TaskCreateResponse)
