@@ -6,7 +6,7 @@ from alembic import command
 from alembic.config import Config
 from alembic.script import ScriptDirectory
 from alembic.runtime.migration import MigrationContext
-from sqlalchemy import inspect
+from sqlalchemy import inspect, text
 from app.config import settings
 from app.database import engine, Base
 from app.utils.logger import logger
@@ -43,6 +43,42 @@ def run_migrations():
         
         has_migrations = os.path.exists(versions_dir) and len([f for f in os.listdir(versions_dir) if f.endswith('.py') and f != '__init__.py']) > 0
         
+        # 检查并修复alembic_version表中的无效revision
+        # 注意：清除alembic_version表是安全的，因为：
+        # 1. alembic_version表只存储版本号，不存储表结构信息
+        # 2. 实际的表结构信息存储在数据库的实际表中
+        # 3. 清除后，后续逻辑会检查数据库是否有表，如果有表会创建基准迁移（不生成变更）
+        try:
+            inspector = inspect(engine)
+            existing_tables = inspector.get_table_names()
+            
+            if 'alembic_version' in existing_tables:
+                # 检查数据库中的revision是否存在
+                with engine.connect() as conn:
+                    result = conn.execute(text("SELECT version_num FROM alembic_version"))
+                    row = result.fetchone()
+                    if row:
+                        db_revision = row[0]
+                        # 检查这个revision是否存在于迁移文件中
+                        script = ScriptDirectory.from_config(alembic_cfg)
+                        try:
+                            # 尝试获取这个revision，如果不存在会抛出异常
+                            script.get_revision(db_revision)
+                            # revision存在，正常情况
+                        except Exception:
+                            # revision不存在，清除alembic_version表
+                            # 这是安全的，因为：
+                            # - 不会影响实际的数据库表结构
+                            # - 后续逻辑会检查数据库是否有表，如果有表会创建基准迁移
+                            logger.warning(f"检测到无效的revision '{db_revision}'，清除alembic_version表...")
+                            logger.info("注意：清除alembic_version表不会影响实际的数据库表结构")
+                            conn.execute(text("DELETE FROM alembic_version"))
+                            conn.commit()
+                            logger.info("已清除无效的revision记录")
+        except Exception as check_error:
+            # 如果检查失败，记录但不阻止启动
+            logger.debug(f"检查alembic_version表时出错: {check_error}")
+        
         if not has_migrations:
             # 首次使用，检查数据库是否已有表
             inspector = inspect(engine)
@@ -62,8 +98,24 @@ def run_migrations():
                 script = ScriptDirectory.from_config(alembic_cfg)
                 head_revision = script.get_current_head()
                 if head_revision:
-                    command.stamp(alembic_cfg, head_revision)
-                    logger.info(f"已标记基准迁移为当前状态: {head_revision}")
+                    try:
+                        command.stamp(alembic_cfg, head_revision)
+                        logger.info(f"已标记基准迁移为当前状态: {head_revision}")
+                    except Exception as stamp_error:
+                        # 如果stamp失败，可能是alembic_version表有问题，尝试清除后重试
+                        error_msg = str(stamp_error).lower()
+                        if "can't locate revision" in error_msg or "no such revision" in error_msg:
+                            logger.warning("stamp失败，尝试清除alembic_version表后重试...")
+                            try:
+                                with engine.connect() as conn:
+                                    conn.execute(text("DELETE FROM alembic_version"))
+                                    conn.commit()
+                                command.stamp(alembic_cfg, head_revision)
+                                logger.info(f"已清除并重新标记基准迁移: {head_revision}")
+                            except Exception as retry_error:
+                                logger.warning(f"重试stamp仍然失败: {retry_error}")
+                        else:
+                            raise
         
         # 应用所有待应用的迁移
         try:

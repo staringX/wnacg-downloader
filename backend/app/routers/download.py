@@ -17,45 +17,8 @@ class BatchDownloadRequest(BaseModel):
     manga_ids: List[str]
 
 
-@router.post("/download/{manga_id}", response_model=TaskCreateResponse)
-def download_manga(manga_id: str, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
-    """
-    下载单个漫画（队列模式，支持断点续传）
-    
-    功能：
-    - 如果已完全下载，直接返回
-    - 如果不在队列中，加入下载队列
-    - 如果已在队列中或正在下载，返回现有任务ID
-    - 边下载边保存，实时更新进度
-    - 通过任务ID查询状态
-    """
-    # 使用下载队列管理器添加任务
-    task = download_queue_manager.add_to_queue(db, manga_id)
-    
-    if not task:
-        # 漫画不存在或已下载
-        manga = db.query(Manga).filter(Manga.id == manga_id).first()
-        if not manga:
-            raise HTTPException(status_code=404, detail="漫画不存在")
-        
-        # 已下载
-        return TaskCreateResponse(
-            success=True,
-            task_id="",
-            message="漫画已下载"
-        )
-    
-    # 如果任务状态是pending，说明是新加入队列的，需要启动执行器
-    if task.status == "pending":
-        # 启动下载执行器（如果还没有运行）
-        background_tasks.add_task(DownloadService.download_executor, db)
-    
-    return TaskCreateResponse(
-        success=True,
-        task_id=task.id,
-        message="下载任务已加入队列" if task.status == "pending" else "下载任务正在执行"
-    )
-
+# 注意：具体路由必须放在参数路由之前，否则会被参数路由匹配
+# 例如：/download/batch 必须在 /download/{manga_id} 之前
 
 @router.get("/download/queue", response_model=List[str])
 def get_download_queue(db: Session = Depends(get_db)):
@@ -142,5 +105,45 @@ def download_batch(request: BatchDownloadRequest, background_tasks: BackgroundTa
         total=len(request.manga_ids),
         success_count=success_count,
         failed_count=failed_count
+    )
+
+
+@router.post("/download/{manga_id}", response_model=TaskCreateResponse)
+def download_manga(manga_id: str, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+    """
+    下载单个漫画（队列模式，支持断点续传）
+    
+    功能：
+    - 如果已完全下载，直接返回
+    - 如果不在队列中，加入下载队列
+    - 如果已在队列中或正在下载，返回现有任务ID
+    - 边下载边保存，实时更新进度
+    - 通过任务ID查询状态
+    """
+    # 使用下载队列管理器添加任务
+    task = download_queue_manager.add_to_queue(db, manga_id)
+    
+    if not task:
+        # 漫画不存在或已下载
+        manga = db.query(Manga).filter(Manga.id == manga_id).first()
+        if not manga:
+            raise HTTPException(status_code=404, detail="漫画不存在")
+        
+        # 已下载
+        return TaskCreateResponse(
+            success=True,
+            task_id="",
+            message="漫画已下载"
+        )
+    
+    # 如果任务状态是pending，说明是新加入队列的，需要启动执行器
+    if task.status == "pending":
+        # 启动下载执行器（如果还没有运行）
+        background_tasks.add_task(DownloadService.download_executor, db)
+    
+    return TaskCreateResponse(
+        success=True,
+        task_id=task.id,
+        message="下载任务已加入队列" if task.status == "pending" else "下载任务正在执行"
     )
 
