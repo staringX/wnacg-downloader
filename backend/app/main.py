@@ -2,7 +2,8 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
-from app.routers import manga, sync, download, recent_updates, tasks, settings
+from app.routers import manga, sync, download, recent_updates, tasks
+from app.routers.settings import router
 from app.database import Base, engine, SessionLocal
 from app.utils.logger import logger
 from app import models  # 🔥 必须导入models，否则Base.metadata找不到表
@@ -81,7 +82,7 @@ app.include_router(sync.router)
 app.include_router(download.router)
 app.include_router(recent_updates.router)
 app.include_router(tasks.router)
-app.include_router(settings.router)
+app.include_router(router)
 
 
 @app.get("/")
