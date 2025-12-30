@@ -1,9 +1,12 @@
 """漫画详情和图片获取模块"""
 import time
 import re
+import threading
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import List, Optional, Dict
 from datetime import datetime
 from selenium.webdriver.common.by import By
+from app.config import settings
 from app.utils.logger import logger, get_error_message
 
 
@@ -18,6 +21,72 @@ class MangaDetailsCrawler:
     def base_url(self):
         """动态获取base_url，确保获取到最新值"""
         return self.browser.base_url
+    
+    def _create_temp_driver(self):
+        """创建临时的driver实例并复制cookies（用于多线程）"""
+        try:
+            from selenium import webdriver
+            from selenium.webdriver.chrome.options import Options
+            from selenium.webdriver.chrome.service import Service
+            import os
+            
+            # 创建Chrome选项（与BrowserManager保持一致）
+            chrome_options = Options()
+            chrome_options.add_argument('--headless')
+            chrome_options.add_argument('--no-sandbox')
+            chrome_options.add_argument('--disable-dev-shm-usage')
+            chrome_options.add_argument('--disable-gpu')
+            chrome_options.add_argument('--window-size=1920,1080')
+            chrome_options.add_argument('--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')
+            
+            # 查找chromedriver路径
+            chromedriver_paths = [
+                '/usr/local/bin/chromedriver',
+                '/usr/bin/chromedriver',
+                '/usr/bin/chromium-driver'
+            ]
+            
+            chromium_binary_paths = [
+                '/usr/bin/chromium',
+                '/usr/bin/chromium-browser'
+            ]
+            
+            chromedriver_path = None
+            for path in chromedriver_paths:
+                if os.path.exists(path):
+                    chromedriver_path = path
+                    break
+            
+            for chromium_path in chromium_binary_paths:
+                if os.path.exists(chromium_path):
+                    chrome_options.binary_location = chromium_path
+                    break
+            
+            # 创建driver
+            if chromedriver_path:
+                service = Service(chromedriver_path)
+                temp_driver = webdriver.Chrome(service=service, options=chrome_options)
+            else:
+                temp_driver = webdriver.Chrome(options=chrome_options)
+            
+            # 复制cookies（如果主driver存在且有cookies）
+            if self.driver and self.base_url:
+                try:
+                    # 先访问基础URL以设置域名
+                    temp_driver.get(self.base_url)
+                    # 复制所有cookies
+                    for cookie in self.driver.get_cookies():
+                        try:
+                            temp_driver.add_cookie(cookie)
+                        except Exception as e:
+                            logger.debug(f"复制cookie失败: {get_error_message(e)}")
+                except Exception as e:
+                    logger.warning(f"复制cookies时出错: {get_error_message(e)}")
+            
+            return temp_driver
+        except Exception as e:
+            logger.error(f"创建临时driver失败: {get_error_message(e)}")
+            return None
     
     def get_manga_details(self, manga_url: str) -> Optional[Dict]:
         """获取漫画详情（页数、更新日期、封面等）"""
@@ -255,18 +324,27 @@ class MangaDetailsCrawler:
                 logger.warning("✗ 没有找到任何图片链接")
                 return []
             
-            # 第二步：逐个访问链接获取原图
-            images = []
+            # 第二步：并发访问链接获取原图
+            thread_count = settings.image_fetch_threads
+            logger.info(f"开始使用 {thread_count} 个线程并发获取 {len(view_urls)} 个原图链接...")
             
-            for idx, view_url in enumerate(view_urls, 1):
+            def fetch_single_image(idx, view_url):
+                """获取单个原图链接的线程函数"""
+                temp_driver = None
                 try:
-                    logger.info(f"  [{idx}/{len(view_urls)}] 获取原图...")
-                    self.driver.get(view_url)
+                    # 创建临时driver
+                    temp_driver = self._create_temp_driver()
+                    if not temp_driver:
+                        logger.warning(f"  [{idx}/{len(view_urls)}] ✗ 创建临时driver失败")
+                        return None
+                    
+                    logger.debug(f"  [{idx}/{len(view_urls)}] 获取原图...")
+                    temp_driver.get(view_url)
                     time.sleep(1.5)
                     
                     # 查找原图
                     # 原图特征：src 包含 wnimg，且路径为 /data/.../xxx.jpg (不含 /t/)
-                    img_elems = self.driver.find_elements(By.CSS_SELECTOR, "img[src*='wnimg']")
+                    img_elems = temp_driver.find_elements(By.CSS_SELECTOR, "img[src*='wnimg']")
                     original_url = None
                     
                     for img_elem in img_elems:
@@ -279,18 +357,50 @@ class MangaDetailsCrawler:
                     if original_url:
                         # 获取文件扩展名
                         ext = original_url.split('.')[-1].split('?')[0] if '.' in original_url else 'jpg'
-                        images.append({
+                        result = {
                             'index': idx,
                             'url': original_url,
                             'filename': f"{idx:04d}.{ext}"
-                        })
-                        logger.debug(f"    ✓ {original_url[:70]}...")
+                        }
+                        logger.debug(f"    [{idx}/{len(view_urls)}] ✓ {original_url[:70]}...")
+                        return result
                     else:
-                        logger.warning(f"    ✗ 未找到原图")
+                        logger.warning(f"    [{idx}/{len(view_urls)}] ✗ 未找到原图")
+                        return None
                         
                 except Exception as e:
-                    logger.warning(f"    ✗ 获取失败: {get_error_message(e)}")
-                    continue
+                    logger.warning(f"    [{idx}/{len(view_urls)}] ✗ 获取失败: {get_error_message(e)}")
+                    return None
+                finally:
+                    # 关闭临时driver
+                    if temp_driver:
+                        try:
+                            temp_driver.quit()
+                        except:
+                            pass
+            
+            # 使用线程池并发获取原图链接
+            images = []
+            images_dict = {}  # 用于按index排序
+            
+            with ThreadPoolExecutor(max_workers=thread_count) as executor:
+                # 提交所有任务
+                future_to_task = {
+                    executor.submit(fetch_single_image, idx, view_url): idx
+                    for idx, view_url in enumerate(view_urls, 1)
+                }
+                
+                # 等待所有任务完成
+                for future in as_completed(future_to_task):
+                    try:
+                        result = future.result()
+                        if result:
+                            images_dict[result['index']] = result
+                    except Exception as e:
+                        logger.error(f"获取原图任务异常: {get_error_message(e)}")
+            
+            # 按index排序，确保顺序正确
+            images = [images_dict[idx] for idx in sorted(images_dict.keys())]
             
             logger.info(f"\n✓ 成功获取 {len(images)}/{len(view_urls)} 张原图")
             return images

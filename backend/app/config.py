@@ -24,6 +24,9 @@ class Settings(BaseSettings):
     # 下载线程数（用于并发下载图片）
     download_threads: int = 5
     
+    # 获取原图链接的并发线程数（用于并发获取原图URL）
+    image_fetch_threads: int = 3
+    
     # API配置
     api_host: str = "0.0.0.0"
     api_port: int = 8000
