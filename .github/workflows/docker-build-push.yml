@@ -117,7 +117,7 @@ jobs:
           push: true
           tags: |
             ${{ env.DOCKER_REGISTRY }}/${{ env.BACKEND_IMAGE }}:${{ steps.version.outputs.VERSION }}
-            ${{ env.DOCKER_REGISTRY }}/${{ env.BACKEND_IMAGE }}:latest
+            ${{ env.DOCKER_REGISTRY }}/${{ env.BACKEND_IMAGE }}:latest-amd64
           platforms: linux/amd64
           cache-from: type=registry,ref=${{ env.DOCKER_REGISTRY }}/${{ env.BACKEND_IMAGE }}:buildcache
           cache-to: type=registry,ref=${{ env.DOCKER_REGISTRY }}/${{ env.BACKEND_IMAGE }}:buildcache,mode=max
@@ -130,7 +130,7 @@ jobs:
           push: true
           tags: |
             ${{ env.DOCKER_REGISTRY }}/${{ env.FRONTEND_IMAGE }}:${{ steps.version.outputs.VERSION }}
-            ${{ env.DOCKER_REGISTRY }}/${{ env.FRONTEND_IMAGE }}:latest
+            ${{ env.DOCKER_REGISTRY }}/${{ env.FRONTEND_IMAGE }}:latest-amd64
           platforms: linux/amd64
           cache-from: type=registry,ref=${{ env.DOCKER_REGISTRY }}/${{ env.FRONTEND_IMAGE }}:buildcache
           cache-to: type=registry,ref=${{ env.DOCKER_REGISTRY }}/${{ env.FRONTEND_IMAGE }}:buildcache,mode=max
@@ -140,5 +140,5 @@ jobs:
           echo "✅ 镜像构建完成"
           echo "后端镜像: ${{ env.DOCKER_REGISTRY }}/${{ env.BACKEND_IMAGE }}:${{ steps.version.outputs.VERSION }}"
           echo "前端镜像: ${{ env.DOCKER_REGISTRY }}/${{ env.FRONTEND_IMAGE }}:${{ steps.version.outputs.VERSION }}"
-          echo "Latest标签已更新到版本: ${{ steps.version.outputs.VERSION }}"
+          echo "Latest-amd64标签已更新到版本: ${{ steps.version.outputs.VERSION }}"
 
