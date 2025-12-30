@@ -21,6 +21,9 @@ class Settings(BaseSettings):
     # 封面保存目录
     cover_dir: str = "./covers"
     
+    # 下载线程数（用于并发下载图片）
+    download_threads: int = 5
+    
     # API配置
     api_host: str = "0.0.0.0"
     api_port: int = 8000

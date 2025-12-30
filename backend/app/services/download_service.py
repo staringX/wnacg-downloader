@@ -3,6 +3,8 @@ import os
 import requests
 import zipfile
 import time
+import threading
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import List, Dict, Optional
 from datetime import datetime
@@ -58,7 +60,7 @@ class MangaDownloader:
                              author: str = "", resume: bool = True, progress_callback=None,
                              manga_metadata: Optional[Dict] = None):
         """
-        下载漫画（生成器版本）- 支持断点续传和实时保存
+        下载漫画（生成器版本）- 支持断点续传和多线程并发下载
         
         Args:
             manga_title: 漫画标题
@@ -83,11 +85,17 @@ class MangaDownloader:
         temp_dir = author_dir / safe_title
         temp_dir.mkdir(parents=True, exist_ok=True)
         
+        # 用于线程安全的计数器
         downloaded_count = 0
+        download_lock = threading.Lock()
         cover_path = None
+        cover_lock = threading.Lock()
         
         try:
-            # 边下载边保存，每张图片立即写入磁盘
+            # 第一步：处理断点续传，收集需要下载的图片
+            download_tasks = []  # 需要下载的任务列表
+            skipped_count = 0
+            
             for img_info in images:
                 img_url = img_info['url']
                 filename = img_info['filename']
@@ -96,7 +104,7 @@ class MangaDownloader:
                 
                 # 🔥 断点续传：检查文件是否已存在
                 if resume and file_path.exists() and file_path.stat().st_size > 0:
-                    downloaded_count += 1
+                    skipped_count += 1
                     logger.debug(f"  [{img_index}/{len(images)}] ⏭️  跳过（已存在）: {filename}")
                     
                     yield {
@@ -114,45 +122,100 @@ class MangaDownloader:
                         import shutil
                         if not cover_path.exists():
                             shutil.copy2(file_path, cover_path)
-                    
-                    continue
-                
-                # 下载图片
-                logger.debug(f"  [{img_index}/{len(images)}] ⬇️  下载: {filename}")
-                
-                if self.download_image(img_url, file_path):
-                    downloaded_count += 1
-                    logger.debug(f"  [{img_index}/{len(images)}] ✅ 完成: {filename}")
-                    
-                    yield {
-                        'index': img_index,
-                        'total': len(images),
-                        'filename': filename,
-                        'status': 'success',
-                        'message': f'下载成功: {filename}',
-                        'downloaded_count': downloaded_count
-                    }
-                    
-                    # 第一张图片作为封面
-                    if not cover_path:
-                        cover_path = self.cover_dir / f"{safe_title}_cover{file_path.suffix}"
-                        cover_path.parent.mkdir(parents=True, exist_ok=True)
-                        import shutil
-                        shutil.copy2(file_path, cover_path)
-                    
-                    # 调用进度回调
-                    if progress_callback:
-                        progress_callback(downloaded_count, len(images), f"已下载 {downloaded_count}/{len(images)}")
                 else:
-                    logger.error(f"  [{img_index}/{len(images)}] ❌ 失败: {filename}")
+                    # 需要下载的图片加入任务列表
+                    download_tasks.append((img_info, file_path))
+            
+            # 如果所有图片都已存在，直接跳到打包
+            if not download_tasks:
+                downloaded_count = skipped_count
+                logger.info(f"所有图片已存在，跳过下载步骤")
+            else:
+                # 第二步：使用多线程并发下载
+                thread_count = settings.download_threads
+                logger.info(f"开始使用 {thread_count} 个线程并发下载 {len(download_tasks)} 张图片...")
+                
+                # 用于跟踪新下载成功的数量（不包括跳过的）
+                new_downloaded_count = 0
+                
+                def download_single_image(img_info, file_path):
+                    """下载单张图片的线程函数"""
+                    nonlocal new_downloaded_count
+                    img_url = img_info['url']
+                    filename = img_info['filename']
+                    img_index = img_info.get('index', 0)
                     
-                    yield {
-                        'index': img_index,
-                        'total': len(images),
-                        'filename': filename,
-                        'status': 'failed',
-                        'message': f'下载失败: {filename}'
+                    logger.debug(f"  [{img_index}/{len(images)}] ⬇️  下载: {filename}")
+                    
+                    success = self.download_image(img_url, file_path)
+                    
+                    if success:
+                        with download_lock:
+                            new_downloaded_count += 1
+                            current_count = new_downloaded_count + skipped_count
+                        
+                        logger.debug(f"  [{img_index}/{len(images)}] ✅ 完成: {filename}")
+                        
+                        # 第一张成功下载的图片作为封面
+                        with cover_lock:
+                            nonlocal cover_path
+                            if not cover_path:
+                                cover_path = self.cover_dir / f"{safe_title}_cover{file_path.suffix}"
+                                cover_path.parent.mkdir(parents=True, exist_ok=True)
+                                import shutil
+                                shutil.copy2(file_path, cover_path)
+                        
+                        return {
+                            'index': img_index,
+                            'total': len(images),
+                            'filename': filename,
+                            'status': 'success',
+                            'message': f'下载成功: {filename}',
+                            'downloaded_count': current_count
+                        }
+                    else:
+                        logger.error(f"  [{img_index}/{len(images)}] ❌ 失败: {filename}")
+                        return {
+                            'index': img_index,
+                            'total': len(images),
+                            'filename': filename,
+                            'status': 'failed',
+                            'message': f'下载失败: {filename}'
+                        }
+                
+                # 使用线程池并发下载
+                # 注意：with 块会确保所有任务完成后再继续
+                with ThreadPoolExecutor(max_workers=thread_count) as executor:
+                    # 提交所有下载任务
+                    future_to_task = {
+                        executor.submit(download_single_image, img_info, file_path): img_info
+                        for img_info, file_path in download_tasks
                     }
+                    
+                    # 等待所有任务完成，并实时yield进度
+                    for future in as_completed(future_to_task):
+                        try:
+                            result = future.result()
+                            yield result
+                            
+                            # 调用进度回调
+                            if progress_callback and result.get('status') == 'success':
+                                total_downloaded = result.get('downloaded_count', 0)
+                                progress_callback(total_downloaded, len(images), f"已下载 {total_downloaded}/{len(images)}")
+                        except Exception as e:
+                            logger.error(f"下载任务异常: {e}")
+                            img_info = future_to_task[future]
+                            yield {
+                                'index': img_info.get('index', 0),
+                                'total': len(images),
+                                'filename': img_info.get('filename', ''),
+                                'status': 'failed',
+                                'message': f'下载异常: {str(e)}'
+                            }
+                
+                # 更新最终下载计数（包括跳过的）
+                downloaded_count = new_downloaded_count + skipped_count
+                logger.info(f"✅ 所有图片下载完成，共 {downloaded_count}/{len(images)} 张（新下载: {new_downloaded_count}，跳过: {skipped_count}）")
             
             # 所有图片下载完成，打包CBZ
             logger.info(f"开始打包 CBZ 文件...")
