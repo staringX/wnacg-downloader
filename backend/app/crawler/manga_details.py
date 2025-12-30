@@ -23,7 +23,7 @@ class MangaDetailsCrawler:
         return self.browser.base_url
     
     def _create_temp_driver(self):
-        """创建临时的driver实例并复制cookies（用于多线程）"""
+        """创建临时的driver实例（用于多线程获取原图链接，无需登录）"""
         try:
             from selenium import webdriver
             from selenium.webdriver.chrome.options import Options
@@ -62,26 +62,12 @@ class MangaDetailsCrawler:
                     chrome_options.binary_location = chromium_path
                     break
             
-            # 创建driver
+            # 创建driver（无需复制cookies，因为原图链接无需登录即可访问）
             if chromedriver_path:
                 service = Service(chromedriver_path)
                 temp_driver = webdriver.Chrome(service=service, options=chrome_options)
             else:
                 temp_driver = webdriver.Chrome(options=chrome_options)
-            
-            # 复制cookies（如果主driver存在且有cookies）
-            if self.driver and self.base_url:
-                try:
-                    # 先访问基础URL以设置域名
-                    temp_driver.get(self.base_url)
-                    # 复制所有cookies
-                    for cookie in self.driver.get_cookies():
-                        try:
-                            temp_driver.add_cookie(cookie)
-                        except Exception as e:
-                            logger.debug(f"复制cookie失败: {get_error_message(e)}")
-                except Exception as e:
-                    logger.warning(f"复制cookies时出错: {get_error_message(e)}")
             
             return temp_driver
         except Exception as e:
