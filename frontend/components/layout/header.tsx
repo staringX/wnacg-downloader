@@ -3,13 +3,12 @@
 
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
-import { Switch } from "@/components/ui/switch"
-import { Label } from "@/components/ui/label"
-import { Download, ImageIcon, CheckCircle2, X, Users, RefreshCw, ExternalLink, FileCheck } from "lucide-react"
+import { Download, ImageIcon, CheckCircle2, X, Users, RefreshCw, ExternalLink, FileCheck, Settings } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { syncApi } from "@/lib/api"
 import { useTaskStatus, useRunningTasks } from "@/hooks/use-task-status"
 import { MobileMenu } from "./mobile-menu"
+import { SettingsDialog } from "@/components/settings-dialog"
 
 interface HeaderProps {
   totalMangas: number
@@ -56,6 +55,7 @@ export function Header({
   const [isVisible, setIsVisible] = useState(true)
   const [isMobile, setIsMobile] = useState(false)
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false)
+  const [settingsOpen, setSettingsOpen] = useState(false)
   const { toast } = useToast()
 
   // 同步收藏夹相关状态
@@ -298,6 +298,17 @@ export function Header({
             </div>
 
             <div className="flex items-center gap-3">
+              {/* 设置按钮 */}
+              <Button
+                onClick={() => setSettingsOpen(true)}
+                variant="outline"
+                className="glass-card hover:shadow-lg transition-all bg-transparent"
+                title="设置"
+              >
+                <Settings className="w-4 h-4 mr-2" />
+                设置
+              </Button>
+              
               {/* 跳转到 Komga 按钮 */}
               <Button
                 onClick={handleOpenKomga}
@@ -308,27 +319,6 @@ export function Header({
                 <ExternalLink className="w-4 h-4 mr-2" />
                 Komga
               </Button>
-
-              <div className="flex items-center gap-2 glass-card px-3 py-2 rounded-lg">
-                <ImageIcon className="w-4 h-4 text-muted-foreground" />
-                <Label htmlFor="preview-toggle" className="text-sm cursor-pointer">
-                  预览
-                </Label>
-                <Switch id="preview-toggle" checked={showPreview} onCheckedChange={onPreviewChange} />
-              </div>
-
-              {/* 按作者分类切换按钮 */}
-              <div className="flex items-center gap-2 glass-card px-3 py-2 rounded-lg">
-                <Users className="w-4 h-4 text-muted-foreground" />
-                <Label htmlFor="group-by-author-toggle" className="text-sm cursor-pointer">
-                  按作者
-                </Label>
-                <Switch
-                  id="group-by-author-toggle"
-                  checked={groupByAuthor}
-                  onCheckedChange={onGroupByAuthorChange}
-                />
-              </div>
 
               <Button
                 onClick={onToggleSelectionMode}
@@ -403,6 +393,16 @@ export function Header({
         </div>
       </header>
 
+      {/* 设置对话框 - 桌面端和移动端共用 */}
+      <SettingsDialog
+        open={settingsOpen}
+        onOpenChange={setSettingsOpen}
+        showPreview={showPreview}
+        onPreviewChange={onPreviewChange}
+        groupByAuthor={groupByAuthor}
+        onGroupByAuthorChange={onGroupByAuthorChange}
+      />
+      
       {/* 移动端菜单按钮 - 悬浮在右上角 */}
       <div className="lg:hidden">
         <MobileMenu
@@ -422,6 +422,7 @@ export function Header({
           onGroupByAuthorChange={onGroupByAuthorChange}
           onUpdateDownloadStatus={handleUpdateDownloadStatus}
           isUpdatingStatus={isUpdatingStatus}
+          onOpenSettings={() => setSettingsOpen(true)}
         />
       </div>
     </>

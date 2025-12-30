@@ -5,6 +5,7 @@ export * from "./tasks"
 export * from "./sync"
 export * from "./download"
 export * from "./recent-updates"
+export * from "./settings"
 
 // 兼容旧代码的默认导出
 import { mangaApi } from "./manga"
@@ -12,6 +13,7 @@ import { tasksApi } from "./tasks"
 import { syncApi } from "./sync"
 import { downloadApi } from "./download"
 import { recentUpdatesApi } from "./recent-updates"
+import { settingsApi } from "./settings"
 
 export const api = {
   ...mangaApi,
@@ -19,6 +21,7 @@ export const api = {
   ...syncApi,
   ...downloadApi,
   ...recentUpdatesApi,
+  ...settingsApi,
   // 保持向后兼容
   fetchMangas: mangaApi.fetchMangas,
   deleteManga: mangaApi.deleteManga,

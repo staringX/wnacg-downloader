@@ -129,3 +129,16 @@ class TaskCreateResponse(BaseModel):
     success: bool
     task_id: str
     message: str
+
+
+class AppConfigResponse(BaseModel):
+    """应用配置响应"""
+    manual_manga_site_url: Optional[str] = None
+    
+    class Config:
+        from_attributes = True
+
+
+class AppConfigUpdate(BaseModel):
+    """更新应用配置请求"""
+    manual_manga_site_url: Optional[str] = None

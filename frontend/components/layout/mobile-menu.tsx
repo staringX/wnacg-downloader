@@ -1,6 +1,7 @@
 // 移动端菜单组件
 "use client"
 
+import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Switch } from "@/components/ui/switch"
 import { Label } from "@/components/ui/label"
@@ -13,14 +14,13 @@ import {
 } from "@/components/ui/sheet"
 import {
   Menu,
-  ImageIcon,
   CheckCircle2,
   X,
   Download,
-  Users,
   RefreshCw,
   ExternalLink,
   FileCheck,
+  Settings,
 } from "lucide-react"
 
 interface MobileMenuProps {
@@ -40,6 +40,7 @@ interface MobileMenuProps {
   onGroupByAuthorChange: (value: boolean) => void
   onUpdateDownloadStatus: () => void
   isUpdatingStatus: boolean
+  onOpenSettings: () => void
 }
 
 export function MobileMenu({
@@ -59,7 +60,10 @@ export function MobileMenu({
   onGroupByAuthorChange,
   onUpdateDownloadStatus,
   isUpdatingStatus,
+  onOpenSettings,
 }: MobileMenuProps) {
+  const [sheetOpen, setSheetOpen] = useState(false)
+
   // 跳转到 Komga - 直接打开 Komga 的完整 URL（避免通过 Next.js 代理导致的 SPA 路径问题）
   const handleOpenKomga = () => {
     if (typeof window !== "undefined") {
@@ -69,8 +73,13 @@ export function MobileMenu({
     }
   }
 
+  const handleOpenSettings = () => {
+    setSheetOpen(false) // 先关闭移动端菜单
+    onOpenSettings() // 然后打开设置对话框
+  }
+
   return (
-    <Sheet>
+    <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
       <SheetTrigger asChild>
         <Button
           size="icon"
@@ -84,6 +93,16 @@ export function MobileMenu({
           <SheetTitle>菜单</SheetTitle>
         </SheetHeader>
         <div className="mt-6 space-y-4">
+          {/* 设置按钮 */}
+          <Button
+            onClick={handleOpenSettings}
+            variant="outline"
+            className="w-full justify-start h-12 text-base glass-card hover:shadow-lg transition-all bg-transparent"
+          >
+            <Settings className="w-5 h-5 mr-3" />
+            设置
+          </Button>
+
           {/* 跳转到 Komga 按钮 */}
           <Button
             onClick={handleOpenKomga}
@@ -93,36 +112,6 @@ export function MobileMenu({
             <ExternalLink className="w-5 h-5 mr-3" />
             Komga
           </Button>
-
-          {/* 预览图开关 */}
-          <div className="flex items-center justify-between glass-card px-4 py-3 rounded-lg">
-            <div className="flex items-center gap-3">
-              <ImageIcon className="w-5 h-5 text-muted-foreground" />
-              <Label htmlFor="mobile-preview-toggle" className="text-base cursor-pointer">
-                预览图
-              </Label>
-            </div>
-            <Switch
-              id="mobile-preview-toggle"
-              checked={showPreview}
-              onCheckedChange={onPreviewChange}
-            />
-          </div>
-
-          {/* 按作者分类切换 */}
-          <div className="flex items-center justify-between glass-card px-4 py-3 rounded-lg">
-            <div className="flex items-center gap-3">
-              <Users className="w-5 h-5 text-muted-foreground" />
-              <Label htmlFor="mobile-group-by-author-toggle" className="text-base cursor-pointer">
-                按作者
-              </Label>
-            </div>
-            <Switch
-              id="mobile-group-by-author-toggle"
-              checked={groupByAuthor}
-              onCheckedChange={onGroupByAuthorChange}
-            />
-          </div>
 
           {/* 多选模式 */}
           <Button

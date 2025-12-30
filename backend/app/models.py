@@ -83,3 +83,17 @@ class Task(Base):
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
     completed_at = Column(DateTime, nullable=True)  # 完成时间
+
+
+class AppConfig(Base):
+    """应用配置表 - 存储应用级别的配置（单例模式）"""
+    __tablename__ = "app_config"
+    
+    # 使用固定ID实现单例模式
+    id = Column(String, primary_key=True, default=lambda: "singleton")
+    
+    # 手动设置的漫画网站链接
+    manual_manga_site_url = Column(String, nullable=True)
+    
+    created_at = Column(DateTime, server_default=func.now())
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())

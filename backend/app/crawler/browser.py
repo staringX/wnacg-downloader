@@ -3,6 +3,8 @@ import time
 import os
 from typing import Optional
 from app.config import settings
+from app.database import SessionLocal
+from app.models import AppConfig
 from app.utils.logger import logger, get_error_message
 
 # 可选的Selenium导入
@@ -73,7 +75,33 @@ class BrowserManager:
             logger.error(f"无法初始化Chrome驱动: {get_error_message(e)}")
             self.driver = None
     
+    def get_manual_url(self) -> Optional[str]:
+        """从数据库获取手动设置的漫画网站链接"""
+        try:
+            db = SessionLocal()
+            try:
+                config = db.query(AppConfig).filter(AppConfig.id == "singleton").first()
+                if config and config.manual_manga_site_url:
+                    logger.info(f"使用手动设置的漫画网站链接: {config.manual_manga_site_url}")
+                    return config.manual_manga_site_url
+            finally:
+                db.close()
+        except Exception as e:
+            logger.debug(f"获取手动设置的链接失败: {get_error_message(e)}")
+        return None
+    
     def get_available_url(self) -> Optional[str]:
+        """获取可用的漫画网站地址（优先使用手动设置的，否则从发布页获取）"""
+        # 优先使用手动设置的链接
+        manual_url = self.get_manual_url()
+        if manual_url:
+            return manual_url
+        
+        # 如果没有手动设置，从发布页获取
+        logger.info("未找到手动设置的链接，从发布页获取...")
+        return self._get_available_url_from_publish_page()
+    
+    def _get_available_url_from_publish_page(self) -> Optional[str]:
         """从发布页获取可用的漫画网站地址（根据页面布局和元素结构查找）"""
         import requests
         from bs4 import BeautifulSoup
@@ -143,8 +171,10 @@ class BrowserManager:
     def login(self, username: str, password: str) -> bool:
         """登录网站"""
         if not self.base_url:
+            # 优先使用手动设置的链接，否则从发布页获取
             self.base_url = self.get_available_url()
             if not self.base_url:
+                logger.error("无法获取漫画网站地址（手动设置或发布页都失败）")
                 return False
         
         if not self.driver:
