@@ -1,6 +1,10 @@
+import os
+from pathlib import Path
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from app.config import settings
 from app.routers import manga, sync, download, recent_updates, tasks
 from app.routers.settings import router
@@ -85,11 +89,46 @@ app.include_router(tasks.router)
 app.include_router(router)
 
 
-@app.get("/")
-def root():
-    return {"message": "漫画下载管理器API"}
-
-
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+
+# ---------------------------------------------------------------------------
+# 前端静态资源（方案B：FastAPI 集约配信）
+# 构建产物（Vite dist）在 Docker 多阶段构建中被复制到 app/static。
+# 存在时：挂载静态资源并对非 /api 路径做 SPA 回退到 index.html；
+# 不存在时（本地仅跑后端）：回退为 JSON 根路由。
+# ---------------------------------------------------------------------------
+FRONTEND_DIR = Path(os.getenv("FRONTEND_DIST", Path(__file__).resolve().parent / "static"))
+INDEX_HTML = FRONTEND_DIR / "index.html"
+
+if INDEX_HTML.exists():
+    # Vite 资源默认输出到 dist/assets
+    assets_dir = FRONTEND_DIR / "assets"
+    if assets_dir.exists():
+        app.mount("/assets", StaticFiles(directory=str(assets_dir)), name="assets")
+
+    @app.get("/")
+    def serve_index():
+        return FileResponse(str(INDEX_HTML))
+
+    # SPA 回退：非 /api、非 /health 的任意路径都返回 index.html
+    @app.get("/{full_path:path}")
+    def spa_fallback(full_path: str):
+        # 未匹配到的 API 路径不应回退到 HTML，交给框架返回 404
+        if full_path.startswith("api/") or full_path == "api":
+            from fastapi import HTTPException
+            raise HTTPException(status_code=404, detail="Not Found")
+        candidate = FRONTEND_DIR / full_path
+        if full_path and candidate.is_file():
+            return FileResponse(str(candidate))
+        return FileResponse(str(INDEX_HTML))
+
+    logger.info(f"前端静态资源已挂载: {FRONTEND_DIR}")
+else:
+    @app.get("/")
+    def root():
+        return {"message": "漫画下载管理器API"}
+
+    logger.info("未找到前端构建产物（开发模式仅提供 API）")

@@ -127,3 +127,47 @@ def download_from_update(update_id: str, background_tasks: BackgroundTasks, db: 
         message="下载任务已加入队列" if task.status == "pending" else "下载任务正在执行"
     )
 
+
+@router.post("/add-update-to-favorite/{update_id}")
+def add_update_to_favorite(update_id: str, db: Session = Depends(get_db)):
+    """将最近更新的漫画收藏到网站（对应作者文件夹）
+
+    与 /api/add-to-favorite 的区别：本接口以 RecentUpdate 表的 id 为入参，
+    因为最近更新条目通常尚未进入 Manga 表（拥有独立的 uuid）。
+    收藏成功后会同步更新 RecentUpdate.is_favorited，以及（若存在）
+    通过 manga_url 匹配到的 Manga 行的 is_favorited。
+    """
+    recent_update = db.query(RecentUpdate).filter(RecentUpdate.id == update_id).first()
+    if not recent_update:
+        raise HTTPException(status_code=404, detail="最近更新记录不存在")
+
+    # 已收藏则直接返回
+    if recent_update.is_favorited:
+        return {"success": True, "message": "漫画已收藏到网站"}
+
+    from app.services.favorite_service import FavoriteService
+    favorite_service = FavoriteService()
+    try:
+        success = favorite_service.add_to_favorite(recent_update.manga_url, recent_update.author)
+        if not success:
+            raise HTTPException(status_code=500, detail="收藏失败，请检查日志")
+
+        # 更新最近更新记录
+        recent_update.is_favorited = True
+
+        # 同步更新 Manga 表中的对应记录（如果已存在）
+        existing_manga = db.query(Manga).filter(Manga.manga_url == recent_update.manga_url).first()
+        if existing_manga and not existing_manga.is_favorited:
+            existing_manga.is_favorited = True
+
+        db.commit()
+        return {"success": True, "message": "已成功收藏到网站"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"收藏最近更新失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"收藏失败: {str(e)}")
+    finally:
+        favorite_service.close()
+

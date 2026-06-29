@@ -1,0 +1,806 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;700;900&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body { font-family: "Noto Sans SC", system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-thumb { background: var(--border, #262636); border-radius: 8px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .4; } }
+  @keyframes shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
+  @keyframes slideUp { from { transform: translateY(16px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+  @keyframes popIn { from { transform: scale(.92); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+</style>
+</helmet>
+<div style="{{ rootStyle }}">
+
+  <!-- ============ HEADER ============ -->
+  <header style="position: sticky; top: 0; z-index: 40; background: color-mix(in srgb, var(--surface, #141420) 88%, transparent); backdrop-filter: blur(18px); border-bottom: 1px solid var(--border, #262636);">
+    <div style="max-width: 1480px; margin: 0 auto; padding: 0 clamp(14px, 3vw, 28px); height: 64px; display: flex; align-items: center; gap: 18px;">
+      <!-- brand -->
+      <div style="display: flex; align-items: center; gap: 11px; flex-shrink: 0;">
+        <div style="width: 38px; height: 38px; border-radius: 11px; background: linear-gradient(135deg, var(--accent, #ec4899), var(--accent2, #f472b6)); display: grid; place-items: center; box-shadow: 0 6px 18px color-mix(in srgb, var(--accent, #ec4899) 45%, transparent);">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19V6a2 2 0 0 1 2-2h7l2 2"></path><path d="M4 19a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-6"></path><path d="M9 13h6"></path></svg>
+        </div>
+        <div style="line-height: 1.05;">
+          <div style="font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 16px; letter-spacing: -.01em; color: var(--text, #f0f0f5);">MangaVault</div>
+          <div style="font-size: 10.5px; color: var(--text2, #9a9ab0); letter-spacing: .04em;">漫画下载管理</div>
+        </div>
+      </div>
+
+      <!-- tabs (desktop) -->
+      <nav style="{{ navStyle }}">
+        <button onClick="{{ goCollection }}" style="{{ tabCollectionStyle }}">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"></rect><rect x="14" y="3" width="7" height="7" rx="1.5"></rect><rect x="3" y="14" width="7" height="7" rx="1.5"></rect><rect x="14" y="14" width="7" height="7" rx="1.5"></rect></svg>
+          收藏夹
+        </button>
+        <button onClick="{{ goRecent }}" style="{{ tabRecentStyle }}">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8v4l3 2"></path><circle cx="12" cy="12" r="9"></circle></svg>
+          最近更新
+          <span style="{{ recentBadgeStyle }}">{{ recentCount }}</span>
+        </button>
+      </nav>
+
+      <div style="flex: 1;"></div>
+
+      <!-- actions (desktop) -->
+      <div style="{{ actionsStyle }}">
+        <button onClick="{{ openKomga }}" title="在 Komga 中打开" style="display: inline-flex; align-items: center; gap: 7px; height: 38px; padding: 0 14px; border-radius: 10px; border: 1px solid var(--border, #262636); background: var(--surface2, #1c1c2b); color: var(--text, #f0f0f5); font-size: 13px; font-weight: 500; cursor: pointer; font-family: inherit;" style-hover="border-color: var(--accent, #ec4899); color: var(--accent, #ec4899);">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 7l10 5 10-5"></path><path d="M2 7l10-5 10 5v10l-10 5-10-5z"></path><path d="M12 12v10"></path></svg>
+          Komga
+        </button>
+        <button onClick="{{ toggleTheme }}" title="切换主题" style="width: 38px; height: 38px; display: grid; place-items: center; border-radius: 10px; border: 1px solid var(--border, #262636); background: var(--surface2, #1c1c2b); color: var(--text2, #9a9ab0); cursor: pointer;" style-hover="color: var(--accent, #ec4899); border-color: var(--accent, #ec4899);">
+          <span style="{{ sunStyle }}"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"></path></svg></span>
+          <span style="{{ moonStyle }}"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"></path></svg></span>
+        </button>
+        <button onClick="{{ openSettings }}" title="设置" style="width: 38px; height: 38px; display: grid; place-items: center; border-radius: 10px; border: 1px solid var(--border, #262636); background: var(--surface2, #1c1c2b); color: var(--text2, #9a9ab0); cursor: pointer;" style-hover="color: var(--accent, #ec4899); border-color: var(--accent, #ec4899);">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-2.9 1.2V21a2 2 0 1 1-4 0v-.1A1.7 1.7 0 0 0 6 19.4l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0-1.2-2.9H2a2 2 0 1 1 0-4h.1A1.7 1.7 0 0 0 4.6 6l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3H10a1.7 1.7 0 0 0 1-1.5V2a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 2.9 1.2l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9V10a1.7 1.7 0 0 0 1.5 1H22a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"></path></svg>
+        </button>
+      </div>
+
+      <!-- mobile menu button -->
+      <button onClick="{{ toggleMobileMenu }}" style="{{ hamburgerStyle }}">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 6h18M3 12h18M3 18h18"></path></svg>
+      </button>
+    </div>
+
+    <!-- sync progress strip -->
+    <div style="{{ syncStripStyle }}">
+      <div style="max-width: 1480px; margin: 0 auto; padding: 6px clamp(14px,3vw,28px); display: flex; align-items: center; gap: 12px;">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--accent, #ec4899)" stroke-width="2.4" stroke-linecap="round" style="animation: spin 1s linear infinite;"><path d="M21 12a9 9 0 1 1-6.2-8.5"></path></svg>
+        <span style="font-size: 12.5px; color: var(--text, #f0f0f5); font-weight: 500;">{{ syncLabel }}</span>
+        <div style="flex: 1; height: 5px; border-radius: 4px; background: var(--surface2, #1c1c2b); overflow: hidden;">
+          <div style="height: 100%; border-radius: 4px; background: linear-gradient(90deg, var(--accent, #ec4899), var(--accent2, #f472b6)); width: {{ syncPctStr }}; transition: width .3s ease;"></div>
+        </div>
+        <span style="font-size: 12px; color: var(--text2, #9a9ab0); font-variant-numeric: tabular-nums; min-width: 38px; text-align: right;">{{ syncPctStr }}</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- mobile dropdown menu -->
+  <div style="{{ mobileMenuStyle }}">
+    <button onClick="{{ goCollection }}" style="{{ mTabCollectionStyle }}">收藏夹</button>
+    <button onClick="{{ goRecent }}" style="{{ mTabRecentStyle }}">最近更新 · {{ recentCount }}</button>
+    <div style="height: 1px; background: var(--border, #262636); margin: 4px 0;"></div>
+    <button onClick="{{ openKomga }}" style="text-align: left; padding: 11px 14px; border-radius: 9px; border: none; background: transparent; color: var(--text, #f0f0f5); font-size: 14px; font-family: inherit; cursor: pointer;">在 Komga 中打开</button>
+    <button onClick="{{ toggleTheme }}" style="text-align: left; padding: 11px 14px; border-radius: 9px; border: none; background: transparent; color: var(--text, #f0f0f5); font-size: 14px; font-family: inherit; cursor: pointer;">切换主题 · {{ themeLabel }}</button>
+    <button onClick="{{ openSettings }}" style="text-align: left; padding: 11px 14px; border-radius: 9px; border: none; background: transparent; color: var(--text, #f0f0f5); font-size: 14px; font-family: inherit; cursor: pointer;">设置</button>
+  </div>
+
+  <!-- ============ MAIN ============ -->
+  <main style="{{ mainStyle }}">
+
+    <!-- stats row -->
+    <section style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 20px;">
+      <div style="position: relative; overflow: hidden; padding: 16px 18px; border-radius: 16px; background: var(--surface, #141420); border: 1px solid var(--border, #262636);">
+        <div style="font-size: 11.5px; color: var(--text2, #9a9ab0); font-weight: 500; letter-spacing: .03em;">总计漫画</div>
+        <div style="font-family: 'Space Grotesk'; font-size: 30px; font-weight: 700; color: var(--text, #f0f0f5); line-height: 1.1; margin-top: 4px;">{{ totalCount }}</div>
+        <svg width="60" height="60" viewBox="0 0 24 24" fill="none" stroke="var(--text2, #9a9ab0)" stroke-width="1.4" style="position: absolute; right: -8px; bottom: -8px; opacity: .12;"><rect x="3" y="3" width="7" height="7" rx="1.5"></rect><rect x="14" y="3" width="7" height="7" rx="1.5"></rect><rect x="3" y="14" width="7" height="7" rx="1.5"></rect><rect x="14" y="14" width="7" height="7" rx="1.5"></rect></svg>
+      </div>
+      <div style="position: relative; overflow: hidden; padding: 16px 18px; border-radius: 16px; background: var(--surface, #141420); border: 1px solid var(--border, #262636);">
+        <div style="font-size: 11.5px; color: var(--text2, #9a9ab0); font-weight: 500; letter-spacing: .03em;">已下载</div>
+        <div style="font-family: 'Space Grotesk'; font-size: 30px; font-weight: 700; color: #22c55e; line-height: 1.1; margin-top: 4px;">{{ downloadedCount }}</div>
+        <svg width="60" height="60" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="1.4" style="position: absolute; right: -8px; bottom: -8px; opacity: .14;"><path d="M20 6L9 17l-5-5"></path></svg>
+      </div>
+      <div style="position: relative; overflow: hidden; padding: 16px 18px; border-radius: 16px; background: var(--surface, #141420); border: 1px solid var(--border, #262636);">
+        <div style="font-size: 11.5px; color: var(--text2, #9a9ab0); font-weight: 500; letter-spacing: .03em;">待下载</div>
+        <div style="font-family: 'Space Grotesk'; font-size: 30px; font-weight: 700; color: var(--accent, #ec4899); line-height: 1.1; margin-top: 4px;">{{ pendingCount }}</div>
+        <svg width="60" height="60" viewBox="0 0 24 24" fill="none" stroke="var(--accent, #ec4899)" stroke-width="1.4" style="position: absolute; right: -8px; bottom: -8px; opacity: .14;"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"></path></svg>
+      </div>
+    </section>
+
+    <!-- toolbar -->
+    <section style="{{ toolbarStyle }}">
+      <!-- search -->
+      <div style="position: relative; flex: 1 1 220px; min-width: 0;">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text2, #9a9ab0)" stroke-width="2" stroke-linecap="round" style="position: absolute; left: 13px; top: 50%; transform: translateY(-50%);"><circle cx="11" cy="11" r="7"></circle><path d="M21 21l-4-4"></path></svg>
+        <input value="{{ query }}" onInput="{{ onSearch }}" placeholder="搜索标题或作者…" style="width: 100%; height: 40px; padding: 0 14px 0 38px; border-radius: 11px; border: 1px solid var(--border, #262636); background: var(--surface, #141420); color: var(--text, #f0f0f5); font-size: 13.5px; font-family: inherit; outline: none;" style-focus="border-color: var(--accent, #ec4899);">
+      </div>
+
+      <!-- view toggle (card/list) -->
+      <div style="display: inline-flex; padding: 3px; border-radius: 11px; border: 1px solid var(--border, #262636); background: var(--surface, #141420); flex-shrink: 0;">
+        <button onClick="{{ setCardView }}" title="卡片" style="{{ viewCardBtn }}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"></rect><rect x="14" y="3" width="7" height="7" rx="1.5"></rect><rect x="3" y="14" width="7" height="7" rx="1.5"></rect><rect x="14" y="14" width="7" height="7" rx="1.5"></rect></svg></button>
+        <button onClick="{{ setListView }}" title="列表" style="{{ viewListBtn }}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"></path></svg></button>
+      </div>
+
+      <!-- sort -->
+      <div style="position: relative; flex-shrink: 0;">
+        <select value="{{ sortBy }}" onChange="{{ onSort }}" style="{{ sortSelectStyle }}">
+          <option value="default">默认排序</option>
+          <option value="title">标题 A→Z</option>
+          <option value="titleDesc">标题 Z→A</option>
+          <option value="pages">页数 多→少</option>
+          <option value="pagesAsc">页数 少→多</option>
+          <option value="status">按状态</option>
+        </select>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text2, #9a9ab0)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="position: absolute; right: 11px; top: 50%; transform: translateY(-50%); pointer-events: none;"><path d="M6 9l6 6 6-6"></path></svg>
+      </div>
+
+      <!-- group toggle -->
+      <button onClick="{{ toggleGroup }}" style="{{ groupBtn }}">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7h18M6 12h12M9 17h6"></path></svg>
+        按作者分组
+      </button>
+
+      <!-- select mode -->
+      <button onClick="{{ toggleSelectMode }}" style="{{ selectBtn }}">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"></path><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></svg>
+        {{ selectLabel }}
+      </button>
+
+      <div style="flex-basis: 100%; height: 0;" class="tb-spacer"></div>
+
+      <!-- sync -->
+      <button onClick="{{ syncNow }}" style="display: inline-flex; align-items: center; gap: 7px; height: 40px; padding: 0 15px; border-radius: 11px; border: 1px solid var(--border, #262636); background: var(--surface, #141420); color: var(--text, #f0f0f5); font-size: 13.5px; font-weight: 500; cursor: pointer; font-family: inherit; flex-shrink: 0;" style-hover="border-color: var(--accent, #ec4899);">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2v6h-6M3 12a9 9 0 0 1 15-6.7L21 8M3 22v-6h6M21 12a9 9 0 0 1-15 6.7L3 16"></path></svg>
+        {{ syncBtnLabel }}
+      </button>
+
+      <!-- download all -->
+      <button onClick="{{ downloadAll }}" style="{{ downloadAllStyle }}">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"></path></svg>
+        下载全部
+        <span style="{{ dlAllBadge }}">{{ pendingCount }}</span>
+      </button>
+    </section>
+
+    <!-- selection action bar -->
+    <div style="{{ selBarStyle }}">
+      <span style="font-size: 13px; color: var(--text, #f0f0f5); font-weight: 500;">已选择 {{ selectedCount }} 项</span>
+      <div style="flex: 1;"></div>
+      <button onClick="{{ batchDelete }}" style="display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 13px; border-radius: 9px; border: 1px solid #ef4444; background: color-mix(in srgb, #ef4444 14%, transparent); color: #ef4444; font-size: 13px; font-weight: 500; cursor: pointer; font-family: inherit;">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"></path></svg>
+        删除所选
+      </button>
+      <button onClick="{{ clearSelection }}" style="height: 34px; padding: 0 13px; border-radius: 9px; border: 1px solid var(--border, #262636); background: var(--surface2, #1c1c2b); color: var(--text2, #9a9ab0); font-size: 13px; cursor: pointer; font-family: inherit;">取消</button>
+    </div>
+
+    <!-- ========= COLLECTION VIEW ========= -->
+    <div style="{{ collectionWrapStyle }}">
+      <sc-for list="{{ sections }}" as="sec" hint-placeholder-count="2">
+        <div style="margin-bottom: 26px;">
+          <sc-if value="{{ sec.showHeader }}" hint-placeholder-val="{{ true }}">
+            <button onClick="{{ sec.onToggleCollapse }}" style="{{ sec.headerStyle }}">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="{{ sec.chevronStyle }}"><path d="M6 9l6 6 6-6"></path></svg>
+              <h3 style="margin: 0; font-size: 15px; font-weight: 700; color: var(--text, #f0f0f5);">{{ sec.author }}</h3>
+              <span style="font-size: 12px; color: var(--text2, #9a9ab0);">{{ sec.count }} 部</span>
+              <span style="flex: 1;"></span>
+              <span style="font-size: 12px; color: var(--text2, #9a9ab0);">{{ sec.collapseLabel }}</span>
+            </button>
+          </sc-if>
+
+          <!-- card grid -->
+          <sc-if value="{{ isCard }}" hint-placeholder-val="{{ true }}">
+            <div style="{{ sec.gridStyle }}">
+              <sc-for list="{{ sec.items }}" as="m" hint-placeholder-count="6">
+                <div onClick="{{ m.onCardClick }}" style="{{ m.cardStyle }}" style-hover="transform: translateY(-4px); border-color: color-mix(in srgb, var(--accent, #ec4899) 55%, var(--border)); box-shadow: 0 12px 28px rgba(0,0,0,.22);">
+                  <!-- cover (hidden when 封面预览 is off) -->
+                  <div style="{{ m.coverWrapStyle }}">
+                    <div style="position: absolute; inset: 0; background: linear-gradient(180deg, transparent 35%, rgba(0,0,0,.72));"></div>
+                    <div style="position: absolute; left: 11px; right: 11px; bottom: 10px;">
+                      <div style="font-size: 13px; font-weight: 700; color: #fff; line-height: 1.25; text-shadow: 0 1px 4px rgba(0,0,0,.5); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;">{{ m.title }}</div>
+                    </div>
+                    <!-- page count chip -->
+                    <div style="position: absolute; top: 9px; right: 9px; padding: 3px 7px; border-radius: 7px; background: rgba(0,0,0,.5); backdrop-filter: blur(4px); font-size: 10.5px; font-weight: 600; color: #fff; display: flex; align-items: center; gap: 3px;">
+                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M4 4h16v16H4zM4 9h16"></path></svg>{{ m.pages }}P
+                    </div>
+                    <!-- selection check -->
+                    <div style="{{ m.checkStyle }}">
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"></path></svg>
+                    </div>
+                    <!-- downloading overlay -->
+                    <div style="{{ m.dlOverlayStyle }}">
+                      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" style="animation: spin 1s linear infinite;"><path d="M21 12a9 9 0 1 1-6.2-8.5"></path></svg>
+                      <div style="font-size: 12px; color: #fff; font-weight: 600; margin-top: 8px; font-variant-numeric: tabular-nums;">{{ m.dlPctStr }}</div>
+                      <div style="width: 70%; height: 4px; border-radius: 3px; background: rgba(255,255,255,.25); margin-top: 7px; overflow: hidden;"><div style="height: 100%; background: var(--accent, #ec4899); width: {{ m.dlPctStr }};"></div></div>
+                    </div>
+                  </div>
+                  <!-- body -->
+                  <div style="{{ m.bodyStyle }}">
+                    <!-- compact header (shown only when cover hidden) -->
+                    <div style="{{ m.compactHeadStyle }}">
+                      <div style="{{ m.swatchStyle }}"></div>
+                      <div style="{{ m.compactTitleStyle }}">{{ m.title }}</div>
+                      <div style="{{ m.compactCheckStyle }}">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"></path></svg>
+                      </div>
+                    </div>
+                    <div style="{{ m.metaStyle }}">{{ m.metaLine }}</div>
+                    <div style="{{ m.footerRowStyle }}">
+                      <button onClick="{{ m.onPrimary }}" style="{{ m.primaryBtnStyle }}" style-hover="{{ m.primaryBtnHover }}">{{ m.primaryBtnContent }}</button>
+                      <button onClick="{{ m.onExternal }}" title="在原站点打开" style="{{ m.iconBtnStyle }}" style-hover="color: var(--accent, #ec4899); border-color: var(--accent, #ec4899); background: color-mix(in srgb, var(--accent, #ec4899) 10%, transparent);">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><path d="M15 3h6v6"></path><path d="M10 14L21 3"></path></svg>
+                      </button>
+                      <button onClick="{{ m.onDelete }}" title="删除" style="{{ m.iconBtnStyle }}" style-hover="color: #ef4444; border-color: #ef4444; background: color-mix(in srgb, #ef4444 10%, transparent);">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"></path></svg>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+          </sc-if>
+
+          <!-- list rows -->
+          <sc-if value="{{ isList }}" hint-placeholder-val="{{ true }}">
+            <div style="{{ sec.listStyle }}">
+              <sc-for list="{{ sec.items }}" as="m" hint-placeholder-count="5">
+                <div onClick="{{ m.onCardClick }}" style="{{ m.rowStyle }}" style-hover="border-color: color-mix(in srgb, var(--accent, #ec4899) 50%, var(--border));">
+                  <div style="{{ m.rowCheckStyle }}">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"></path></svg>
+                  </div>
+                  <div style="{{ m.rowThumbStyle }}"></div>
+                  <div style="flex: 1; min-width: 0;">
+                    <div style="font-size: 14px; font-weight: 600; color: var(--text, #f0f0f5); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{ m.title }}</div>
+                    <div style="font-size: 12px; color: var(--text2, #9a9ab0); margin-top: 3px;">{{ m.author }} · {{ m.pages }} 页</div>
+                  </div>
+                  <button onClick="{{ m.onPrimary }}" style="{{ m.rowPrimaryStyle }}" style-hover="{{ m.rowPrimaryHover }}">{{ m.rowPrimaryContent }}</button>
+                </div>
+              </sc-for>
+            </div>
+          </sc-if>
+        </div>
+      </sc-for>
+
+      <!-- empty state -->
+      <div style="{{ emptyStyle }}">
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--text2, #9a9ab0)" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" style="opacity: .5;"><circle cx="11" cy="11" r="7"></circle><path d="M21 21l-4-4"></path></svg>
+        <div style="margin-top: 14px; font-size: 14px; color: var(--text2, #9a9ab0);">没有匹配的漫画</div>
+      </div>
+    </div>
+
+    <!-- ========= RECENT UPDATES VIEW ========= -->
+    <div style="{{ recentWrapStyle }}">
+      <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 18px; padding: 13px 16px; border-radius: 14px; background: linear-gradient(120deg, color-mix(in srgb, var(--accent,#ec4899) 16%, var(--surface)), var(--surface)); border: 1px solid color-mix(in srgb, var(--accent,#ec4899) 30%, var(--border));">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--accent, #ec4899)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h7l-1 8 10-12h-7z"></path></svg>
+        <div style="flex: 1;">
+          <div style="font-size: 13.5px; font-weight: 600; color: var(--text, #f0f0f5);">关注作者的新作品</div>
+          <div style="font-size: 11.5px; color: var(--text2, #9a9ab0); margin-top: 1px;">基于收藏夹作者检索，按更新日期降序排列</div>
+        </div>
+        <button onClick="{{ toggleRGroup }}" style="{{ recentGroupBtn }}">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7h18M6 12h12M9 17h6"></path></svg>
+          按作者分组
+        </button>
+        <button onClick="{{ syncRecent }}" style="display: inline-flex; align-items: center; gap: 6px; height: 36px; padding: 0 13px; border-radius: 10px; border: none; background: linear-gradient(135deg, var(--accent, #ec4899), var(--accent2, #f472b6)); color: #fff; font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit;">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2v6h-6M3 12a9 9 0 0 1 15-6.7L21 8"></path></svg>
+          检索新作
+        </button>
+      </div>
+
+      <sc-for list="{{ recentSections }}" as="rsec" hint-placeholder-count="2">
+        <div style="margin-bottom: 22px;">
+          <sc-if value="{{ rsec.showHeader }}" hint-placeholder-val="{{ true }}">
+            <button onClick="{{ rsec.onToggleCollapse }}" style="{{ rsec.headerStyle }}">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="{{ rsec.chevronStyle }}"><path d="M6 9l6 6 6-6"></path></svg>
+              <h3 style="margin: 0; font-size: 15px; font-weight: 700; color: var(--text, #f0f0f5);">{{ rsec.author }}</h3>
+              <span style="font-size: 12px; color: var(--text2, #9a9ab0);">{{ rsec.count }} 部</span>
+              <span style="flex: 1;"></span>
+              <span style="font-size: 12px; color: var(--text2, #9a9ab0);">{{ rsec.collapseLabel }}</span>
+            </button>
+          </sc-if>
+          <div style="{{ rsec.gridStyle }}">
+            <sc-for list="{{ rsec.items }}" as="r" hint-placeholder-count="6">
+          <div style="display: flex; gap: 12px; padding: 12px; border-radius: 14px; background: var(--surface, #141420); border: 1px solid var(--border, #262636);" style-hover="border-color: color-mix(in srgb, var(--accent,#ec4899) 45%, var(--border));">
+            <div style="position: relative; width: 74px; height: 100px; flex-shrink: 0; border-radius: 10px; overflow: hidden; background: {{ r.coverBg }};">
+              <div style="position: absolute; top: 6px; left: 6px; padding: 2px 6px; border-radius: 6px; background: var(--accent, #ec4899); color: #fff; font-size: 9.5px; font-weight: 700;">NEW</div>
+            </div>
+            <div style="flex: 1; min-width: 0; display: flex; flex-direction: column;">
+              <div style="font-size: 13.5px; font-weight: 600; color: var(--text, #f0f0f5); line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;">{{ r.title }}</div>
+              <div style="font-size: 11.5px; color: var(--text2, #9a9ab0); margin-top: 4px;">{{ r.author }}</div>
+              <div style="display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--text2, #9a9ab0); margin-top: 5px;">
+                <span style="display: inline-flex; align-items: center; gap: 3px;"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"></rect><path d="M16 2v4M8 2v4M3 10h18"></path></svg>{{ r.date }}</span>
+                <span style="display: inline-flex; align-items: center; gap: 3px;"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16v16H4zM4 9h16"></path></svg>{{ r.pages }}P</span>
+              </div>
+              <div style="flex: 1;"></div>
+              <div style="display: flex; gap: 7px; margin-top: 10px;">
+                <button onClick="{{ r.onFav }}" title="收藏到站点" style="{{ r.favStyle }}">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="{{ r.heartFill }}" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 0 0-7.8 7.8l1 1.1L12 21l7.8-7.5 1-1.1a5.5 5.5 0 0 0 0-7.8z"></path></svg>
+                </button>
+                <button onClick="{{ r.onDownload }}" style="{{ r.dlStyle }}">{{ r.dlLabel }}</button>
+              </div>
+            </div>
+          </div>
+            </sc-for>
+          </div>
+        </div>
+      </sc-for>
+    </div>
+  </main>
+
+  <!-- ============ SETTINGS DIALOG ============ -->
+  <div style="{{ settingsOverlayStyle }}" onClick="{{ closeSettings }}">
+    <div onClick="{{ stop }}" style="{{ settingsPanelStyle }}">
+      <div style="display: flex; align-items: center; gap: 10px; padding: 18px 20px; border-bottom: 1px solid var(--border, #262636);">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--accent, #ec4899)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-2.9 1.2V21a2 2 0 1 1-4 0v-.1A1.7 1.7 0 0 0 6 19.4l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0-1.2-2.9H2a2 2 0 1 1 0-4h.1A1.7 1.7 0 0 0 4.6 6l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3H10a1.7 1.7 0 0 0 1-1.5V2a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 2.9 1.2l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9V10a1.7 1.7 0 0 0 1.5 1H22a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"></path></svg>
+        <div style="font-size: 16px; font-weight: 700; color: var(--text, #f0f0f5);">设置</div>
+        <div style="flex: 1;"></div>
+        <button onClick="{{ closeSettings }}" style="width: 32px; height: 32px; display: grid; place-items: center; border-radius: 8px; border: none; background: var(--surface2, #1c1c2b); color: var(--text2, #9a9ab0); cursor: pointer;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"></path></svg></button>
+      </div>
+      <div style="padding: 20px; display: flex; flex-direction: column; gap: 18px;">
+        <div>
+          <label style="display: block; font-size: 12.5px; font-weight: 600; color: var(--text, #f0f0f5); margin-bottom: 7px;">手动站点域名</label>
+          <input value="{{ siteUrl }}" onInput="{{ onSiteUrl }}" placeholder="https://www.wnacg.com" style="width: 100%; height: 40px; padding: 0 13px; border-radius: 10px; border: 1px solid var(--border, #262636); background: var(--surface2, #1c1c2b); color: var(--text, #f0f0f5); font-size: 13px; font-family: inherit; outline: none;" style-focus="border-color: var(--accent, #ec4899);">
+          <div style="font-size: 11px; color: var(--text2, #9a9ab0); margin-top: 6px;">填写后优先于自动获取的发布页域名（需以 http(s):// 开头）。</div>
+        </div>
+        <div style="display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border-radius: 11px; background: var(--surface2, #1c1c2b);">
+          <div>
+            <div style="font-size: 13px; font-weight: 500; color: var(--text, #f0f0f5);">显示封面预览</div>
+            <div style="font-size: 11px; color: var(--text2, #9a9ab0); margin-top: 2px;">关闭后隐藏封面，以更紧凑、省空间的方式排列</div>
+          </div>
+          <button onClick="{{ togglePreview }}" style="{{ previewSwitch }}"><span style="{{ previewKnob }}"></span></button>
+        </div>
+        <button onClick="{{ closeSettings }}" style="height: 44px; border-radius: 11px; border: none; background: linear-gradient(135deg, var(--accent, #ec4899), var(--accent2, #f472b6)); color: #fff; font-size: 14px; font-weight: 600; cursor: pointer; font-family: inherit;">保存设置</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- mobile FAB -->
+  <button onClick="{{ syncNow }}" style="{{ fabStyle }}">
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2v6h-6M3 12a9 9 0 0 1 15-6.7L21 8M3 22v-6h6M21 12a9 9 0 0 1-15 6.7L3 16"></path></svg>
+  </button>
+
+  <!-- toast -->
+  <div style="{{ toastStyle }}">{{ toastMsg }}</div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1280,&quot;height&quot;:860},&quot;accentColor&quot;:{&quot;editor&quot;:&quot;color&quot;,&quot;default&quot;:&quot;#ec4899&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;主题&quot;}}">
+class Component extends DCLogic {
+  state = {
+    tab: 'collection',
+    theme: 'dark',
+    view: 'card',
+    sortBy: 'default',
+    grouped: true,
+    collapsed: {},
+    rGrouped: true,
+    rCollapsed: {},
+    selectMode: false,
+    selected: {},
+    mobileMenu: false,
+    settingsOpen: false,
+    showPreview: true,
+    query: '',
+    siteUrl: 'https://www.wnacg.com',
+    syncing: false,
+    syncPct: 0,
+    syncKind: '',
+    dlProgress: {},
+    favorited: {},
+    addedRecent: {},
+    toast: '',
+    isMobile: false,
+    mangas: [
+      { id:'m1', title:'夏日的回响 完全版', author:'雨宫ひとみ', pages:42, status:'downloaded', c:0 },
+      { id:'m2', title:'午后图书馆的秘密', author:'雨宫ひとみ', pages:28, status:'pending', c:1 },
+      { id:'m3', title:'樱花飘落的季节', author:'雨宫ひとみ', pages:36, status:'downloaded', c:2 },
+      { id:'m4', title:'霓虹都市夜未眠', author:'黒井ススム', pages:54, status:'pending', c:3 },
+      { id:'m5', title:'机械之心 第一卷', author:'黒井ススム', pages:48, status:'downloaded', c:4 },
+      { id:'m6', title:'雨季旅人手记', author:'黒井ススム', pages:30, status:'pending', c:5 },
+      { id:'m7', title:'星海航行日志', author:'みけおう', pages:62, status:'downloaded', c:0 },
+      { id:'m8', title:'温柔的怪物们', author:'みけおう', pages:33, status:'pending', c:2 },
+      { id:'m9', title:'白色房间的清晨', author:'桐谷ナオ', pages:40, status:'downloaded', c:4 },
+      { id:'m10', title:'失落花园的访客', author:'桐谷ナオ', pages:45, status:'pending', c:1 },
+      { id:'m11', title:'黄昏列车 终点站', author:'桐谷ナオ', pages:38, status:'downloaded', c:3 },
+      { id:'m12', title:'琥珀色的约定', author:'桐谷ナオ', pages:50, status:'pending', c:5 },
+      { id:'m13', title:'银月下的舞会', author:'白石ありす', pages:44, status:'downloaded', c:2 },
+      { id:'m14', title:'深海图鉴 增补', author:'白石ありす', pages:58, status:'pending', c:0 },
+    ],
+    recent: [
+      { id:'r1', title:'盛夏纪行 新刊', author:'雨宫ひとみ', pages:46, date:'2026-06-25', c:1 },
+      { id:'r2', title:'霓虹回廊 续篇', author:'黒井ススム', pages:52, date:'2026-06-22', c:3 },
+      { id:'r3', title:'猫与天文台', author:'みけおう', pages:34, date:'2026-06-20', c:0 },
+      { id:'r4', title:'晨雾中的信号', author:'桐谷ナオ', pages:41, date:'2026-06-18', c:4 },
+      { id:'r5', title:'银河剧场', author:'白石ありす', pages:48, date:'2026-06-15', c:5 },
+      { id:'r6', title:'琉璃色的午睡', author:'雨宫ひとみ', pages:29, date:'2026-06-12', c:2 },
+    ],
+  };
+
+  covers = [
+    'linear-gradient(135deg,#ec4899,#7c3aed)',
+    'linear-gradient(135deg,#3b82f6,#06b6d4)',
+    'linear-gradient(135deg,#f59e0b,#ef4444)',
+    'linear-gradient(135deg,#10b981,#3b82f6)',
+    'linear-gradient(135deg,#8b5cf6,#ec4899)',
+    'linear-gradient(135deg,#0ea5e9,#6366f1)',
+  ];
+
+  componentDidMount() {
+    this._onResize = () => this.setState({ isMobile: window.innerWidth < 820 });
+    this._onResize();
+    window.addEventListener('resize', this._onResize);
+  }
+  componentWillUnmount() {
+    window.removeEventListener('resize', this._onResize);
+    if (this._tick) clearInterval(this._tick);
+    if (this._sync) clearInterval(this._sync);
+    if (this._toastT) clearTimeout(this._toastT);
+  }
+
+  toast(msg) {
+    this.setState({ toast: msg });
+    if (this._toastT) clearTimeout(this._toastT);
+    this._toastT = setTimeout(() => this.setState({ toast: '' }), 2200);
+  }
+
+  // ---- downloads ----
+  startDownload(id) {
+    const m = this.state.mangas.find(x => x.id === id);
+    if (!m || m.status === 'downloaded' || m.status === 'downloading') return;
+    this.setState(s => ({
+      mangas: s.mangas.map(x => x.id === id ? { ...x, status: 'downloading' } : x),
+      dlProgress: { ...s.dlProgress, [id]: 0 },
+    }));
+    this.ensureTicker();
+  }
+  ensureTicker() {
+    if (this._tick) return;
+    this._tick = setInterval(() => {
+      this.setState(s => {
+        const dp = { ...s.dlProgress };
+        let active = false;
+        let mangas = s.mangas;
+        Object.keys(dp).forEach(id => {
+          dp[id] = Math.min(100, dp[id] + 5 + Math.random() * 8);
+          if (dp[id] >= 100) {
+            mangas = mangas.map(x => x.id === id ? { ...x, status: 'downloaded' } : x);
+            delete dp[id];
+          } else active = true;
+        });
+        if (!active && Object.keys(dp).length === 0) {
+          clearInterval(this._tick); this._tick = null;
+        }
+        return { dlProgress: dp, mangas };
+      });
+    }, 240);
+  }
+  downloadAll() {
+    const pend = this.state.mangas.filter(m => m.status === 'pending');
+    if (!pend.length) { this.toast('没有待下载的漫画'); return; }
+    pend.forEach((m, i) => setTimeout(() => this.startDownload(m.id), i * 180));
+    this.toast('已加入下载队列 · ' + pend.length + ' 部');
+  }
+
+  // ---- sync ----
+  runSync(kind, label) {
+    if (this.state.syncing) return;
+    this.setState({ syncing: true, syncPct: 0, syncKind: kind });
+    this.toast(label + '中…');
+    this._sync = setInterval(() => {
+      this.setState(s => {
+        const p = Math.min(100, s.syncPct + 6 + Math.random() * 9);
+        if (p >= 100) {
+          clearInterval(this._sync); this._sync = null;
+          setTimeout(() => this.setState({ syncing: false }), 500);
+          this.toast(label + '完成');
+        }
+        return { syncPct: p };
+      });
+    }, 220);
+  }
+  syncNow() { this.runSync('collection', '收藏夹同步'); }
+  syncRecent() { this.runSync('recent', '新作检索'); }
+
+  renderVals() {
+    const s = this.state;
+    const accent = this.props.accentColor ?? '#ec4899';
+    const dark = s.theme === 'dark';
+    const accent2 = 'color-mix(in srgb, ' + accent + ', white 22%)';
+
+    const tokens = dark ? {
+      '--bg':'#0a0a0f','--surface':'#141420','--surface2':'#1c1c2b','--border':'#262636','--text':'#f0f0f5','--text2':'#9a9ab0'
+    } : {
+      '--bg':'#f4f4f8','--surface':'#ffffff','--surface2':'#f0f0f4','--border':'#e4e4ec','--text':'#16161d','--text2':'#71718a'
+    };
+    const rootStyle = {
+      ...tokens, '--accent': accent, '--accent2': accent2,
+      minHeight: '100vh', background: 'var(--bg)', color: 'var(--text)', position: 'relative',
+      transition: 'background .3s ease, color .3s ease',
+    };
+
+    const total = s.mangas.length;
+    const downloaded = s.mangas.filter(m => m.status === 'downloaded').length;
+    const pending = s.mangas.filter(m => m.status === 'pending').length;
+
+    // filter
+    const q = s.query.trim().toLowerCase();
+    const filtered = s.mangas.filter(m => !q || m.title.toLowerCase().includes(q) || m.author.toLowerCase().includes(q));
+
+    const statusMeta = (st) => {
+      if (st === 'downloaded') return { text:'已下载', color:'#22c55e' };
+      if (st === 'downloading') return { text:'下载中', color:'#3b82f6' };
+      return { text:'待下载', color: accent };
+    };
+
+    const svgIcon = (kind, size) => {
+      const sz = size || 14;
+      const paths = kind === 'check'
+        ? ['M20 6L9 17l-5-5']
+        : ['M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4','M7 10l5 5 5-5','M12 15V3'];
+      return React.createElement('svg', { key:'i', width:sz, height:sz, viewBox:'0 0 24 24', fill:'none', stroke:'currentColor', strokeWidth:2.2, strokeLinecap:'round', strokeLinejoin:'round' },
+        paths.map((d,i) => React.createElement('path',{ key:i, d })));
+    };
+
+    const showCover = s.showPreview;
+    const compact = !s.showPreview;
+    const isM = s.isMobile;
+    const primH = isM ? '44px' : '34px';        // mobile touch target ≥44px
+    const iconSz = isM ? '44px' : '32px';
+    const ctrlFont = isM ? '14px' : '12.5px';
+
+    const decorate = (m) => {
+      const sm = statusMeta(m.status);
+      const sel = !!s.selected[m.id];
+      const pct = Math.round(s.dlProgress[m.id] || 0);
+      const isDl = m.status === 'downloading';
+      const isDone = m.status === 'downloaded';
+
+      // single, always-present status/action control — never appears/disappears
+      const primaryBase = { flex:1, minWidth:0, height: primH, borderRadius:'9px', border:'none', fontFamily:'inherit', fontSize: ctrlFont, fontWeight:600, display:'flex', alignItems:'center', justifyContent:'center', gap:'6px', transition:'filter .15s ease, transform .12s ease, background .15s ease' };
+      let primaryBtnStyle, primaryBtnContent, primaryBtnHover;
+      if (isDone) {
+        primaryBtnStyle = { ...primaryBase, cursor:'default', background:'color-mix(in srgb, #22c55e 14%, var(--surface2))', color:'#22c55e' };
+        primaryBtnContent = [svgIcon('check'), React.createElement('span',{ key:'l' },'已下载')];
+        primaryBtnHover = {};
+      } else if (isDl) {
+        primaryBtnStyle = { ...primaryBase, cursor:'default', background:'var(--surface2)', color:'var(--text2)' };
+        primaryBtnContent = '下载中 ' + pct + '%';
+        primaryBtnHover = {};
+      } else {
+        primaryBtnStyle = { ...primaryBase, cursor:'pointer', background:'linear-gradient(135deg,' + accent + ',' + accent2 + ')', color:'#fff' };
+        primaryBtnContent = [svgIcon('dl'), React.createElement('span',{ key:'l' },'下载')];
+        primaryBtnHover = { filter:'brightness(1.08)', transform:'translateY(-1px)' };
+      }
+
+      const iconBtnStyle = { width: iconSz, height: iconSz, flexShrink:0, display:'grid', placeItems:'center', borderRadius:'9px', border:'1px solid var(--border)', background:'transparent', color:'var(--text2)', cursor:'pointer', transition:'color .15s ease, border-color .15s ease, background .15s ease' };
+
+      return {
+        ...m,
+        coverBg: this.covers[m.c % this.covers.length],
+        badgeText: sm.text,
+        dlPctStr: pct + '%',
+        metaLine: compact ? (m.author + ' · ' + m.pages + 'P') : m.author,
+        // card shell + cover
+        cardStyle: { cursor:'pointer', borderRadius:'14px', background:'var(--surface)', border:'1px solid ' + (sel ? accent : 'var(--border)'), overflow:'hidden', transition:'transform .18s ease, border-color .18s ease, box-shadow .18s ease', boxShadow: sel ? '0 0 0 2px ' + accent : 'none' },
+        coverWrapStyle: { display: showCover ? 'block':'none', position:'relative', aspectRatio:'3/4', borderRadius:'13px 13px 0 0', overflow:'hidden', background: this.covers[m.c % this.covers.length] },
+        checkStyle: { position:'absolute', top:'9px', left:'9px', width:'24px', height:'24px', borderRadius:'7px', display: (showCover && s.selectMode) ? 'grid':'none', placeItems:'center', background: sel ? accent : 'rgba(0,0,0,.5)', border:'1.5px solid #fff' },
+        dlOverlayStyle: { position:'absolute', inset:0, display: isDl ? 'flex':'none', flexDirection:'column', alignItems:'center', justifyContent:'center', background:'rgba(0,0,0,.6)', backdropFilter:'blur(2px)' },
+        // compact (no-cover) header
+        bodyStyle: { padding: compact ? '11px 12px 12px' : '9px 11px 11px' },
+        compactHeadStyle: { display: compact ? 'flex':'none', alignItems:'center', gap:'9px', marginBottom:'8px' },
+        swatchStyle: { width:'30px', height:'40px', borderRadius:'7px', flexShrink:0, background: this.covers[m.c % this.covers.length] },
+        compactTitleStyle: { flex:1, minWidth:0, fontSize:'13.5px', fontWeight:700, color:'var(--text)', lineHeight:1.25, display:'-webkit-box', WebkitLineClamp:2, WebkitBoxOrient:'vertical', overflow:'hidden' },
+        compactCheckStyle: { width:'24px', height:'24px', flexShrink:0, borderRadius:'7px', display: (compact && s.selectMode) ? 'grid':'none', placeItems:'center', background: sel ? accent : 'transparent', border:'1.5px solid ' + (sel ? accent : 'var(--border)'), color:'#fff' },
+        metaStyle: { fontSize:'11.5px', color:'var(--text2)', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' },
+        footerRowStyle: { display:'flex', gap:'7px', marginTop: compact ? '10px':'9px' },
+        // single status/action button
+        primaryBtnStyle, primaryBtnContent, primaryBtnHover,
+        iconBtnStyle,
+        onPrimary: (e) => { e && e.stopPropagation(); if (!isDl && !isDone) this.startDownload(m.id); },
+        onExternal: (e) => { e && e.stopPropagation(); this.toast('在原站点打开《' + m.title + '》'); },
+        onDelete: (e) => { e && e.stopPropagation(); this.setState(st => ({ mangas: st.mangas.filter(x => x.id !== m.id) })); this.toast('已删除'); },
+        onCardClick: () => { if (s.selectMode) this.setState(st => ({ selected: { ...st.selected, [m.id]: !st.selected[m.id] } })); else this.toast('在原站点打开《' + m.title + '》阅读'); },
+        // list
+        rowStyle: { cursor:'pointer', display:'flex', alignItems:'center', gap:'13px', padding: isM ? '12px 13px' : '10px 13px', borderRadius:'12px', background:'var(--surface)', border:'1px solid ' + (sel ? accent : 'var(--border)'), transition:'border-color .15s ease, background .15s ease' },
+        rowCheckStyle: { width:'22px', height:'22px', flexShrink:0, borderRadius:'6px', display: s.selectMode ? 'grid':'none', placeItems:'center', background: sel ? accent : 'transparent', border:'1.5px solid ' + (sel ? accent : 'var(--border)') },
+        rowThumbStyle: { display: showCover ? 'block':'none', width:'42px', height:'56px', borderRadius:'8px', flexShrink:0, background: this.covers[m.c % this.covers.length] },
+        rowPrimaryStyle: { ...primaryBtnStyle, flex:'none', minWidth: isM ? '108px' : '118px', padding:'0 14px' },
+        rowPrimaryContent: primaryBtnContent,
+        rowPrimaryHover: primaryBtnHover,
+      };
+    };
+
+    // sorting
+    const sorted = [...filtered];
+    if (s.sortBy === 'title') sorted.sort((a,b) => a.title.localeCompare(b.title, 'zh'));
+    else if (s.sortBy === 'titleDesc') sorted.sort((a,b) => b.title.localeCompare(a.title, 'zh'));
+    else if (s.sortBy === 'pages') sorted.sort((a,b) => b.pages - a.pages);
+    else if (s.sortBy === 'pagesAsc') sorted.sort((a,b) => a.pages - b.pages);
+    else if (s.sortBy === 'status') { const rk = m => m.status==='downloading'?0:(m.status==='pending'?1:2); sorted.sort((a,b) => rk(a)-rk(b)); }
+
+    // sections
+    const mkSection = (author, items, showHeader) => {
+      const collapsed = !!s.collapsed[author];
+      return {
+        author, showHeader, count: items.length, items: items.map(decorate), collapsed,
+        headerStyle: { width:'100%', display:'flex', alignItems:'center', gap:'10px', marginBottom:'13px', paddingBottom:'8px', border:'none', borderBottom:'1px solid var(--border)', background:'transparent', cursor:'pointer', fontFamily:'inherit', textAlign:'left' },
+        chevronStyle: { flexShrink:0, color:'var(--text2)', transform: collapsed ? 'rotate(-90deg)':'none', transition:'transform .2s' },
+        gridStyle: { display: collapsed ? 'none':'grid', gridTemplateColumns:'repeat(auto-fill, minmax(168px, 1fr))', gap:'16px' },
+        listStyle: { display: collapsed ? 'none':'flex', flexDirection:'column', gap:'9px' },
+        collapseLabel: collapsed ? '展开' : '收起',
+        onToggleCollapse: () => this.setState(st => ({ collapsed: { ...st.collapsed, [author]: !st.collapsed[author] } })),
+      };
+    };
+    let sections;
+    if (s.grouped) {
+      const order = [];
+      const map = {};
+      sorted.forEach(m => { if (!map[m.author]) { map[m.author] = []; order.push(m.author); } map[m.author].push(m); });
+      sections = order.map(a => mkSection(a, map[a], true));
+    } else {
+      sections = sorted.length ? [mkSection('', sorted, false)] : [];
+    }
+
+    const isMobile = s.isMobile;
+
+    // recent decorate
+    const recentList = s.recent.map(r => {
+      const fav = !!s.favorited[r.id];
+      const added = !!s.addedRecent[r.id];
+      return {
+        ...r,
+        coverBg: this.covers[r.c % this.covers.length],
+        heartFill: fav ? accent : 'none',
+        favStyle: { width:'36px', height:'34px', flexShrink:0, display:'grid', placeItems:'center', borderRadius:'9px', cursor:'pointer', fontFamily:'inherit',
+          border:'1px solid ' + (fav ? accent : 'var(--border)'), background: fav ? 'color-mix(in srgb,' + accent + ' 14%, transparent)':'transparent', color: fav ? accent : 'var(--text2)' },
+        dlStyle: { flex:1, height:'34px', borderRadius:'9px', border:'none', cursor:'pointer', fontFamily:'inherit', fontSize:'12.5px', fontWeight:600,
+          background: added ? 'var(--surface2)' : 'linear-gradient(135deg,' + accent + ',' + accent2 + ')', color: added ? 'var(--text2)' : '#fff' },
+        dlLabel: added ? '已加入' : '下载',
+        onFav: () => { this.setState(st => ({ favorited: { ...st.favorited, [r.id]: !st.favorited[r.id] } })); this.toast(fav ? '已取消收藏' : '已收藏到站点'); },
+        onDownload: () => { if (added) return; this.setState(st => ({ addedRecent: { ...st.addedRecent, [r.id]: true } })); this.toast('已加入收藏夹并下载'); },
+      };
+    });
+
+    // recent sections (author grouping)
+    const mkRSection = (author, items, showHeader) => {
+      const collapsed = !!s.rCollapsed[author];
+      return {
+        author, showHeader, count: items.length, items, collapsed,
+        headerStyle: { width:'100%', display:'flex', alignItems:'center', gap:'10px', marginBottom:'13px', paddingBottom:'8px', border:'none', borderBottom:'1px solid var(--border)', background:'transparent', cursor:'pointer', fontFamily:'inherit', textAlign:'left' },
+        chevronStyle: { flexShrink:0, color:'var(--text2)', transform: collapsed ? 'rotate(-90deg)':'none', transition:'transform .2s' },
+        gridStyle: { display: collapsed ? 'none':'grid', gridTemplateColumns:'repeat(auto-fill, minmax(260px, 1fr))', gap:'14px' },
+        collapseLabel: collapsed ? '展开' : '收起',
+        onToggleCollapse: () => this.setState(st => ({ rCollapsed: { ...st.rCollapsed, [author]: !st.rCollapsed[author] } })),
+      };
+    };
+    let recentSections;
+    if (s.rGrouped) {
+      const ro = [], rm = {};
+      recentList.forEach(r => { if (!rm[r.author]) { rm[r.author] = []; ro.push(r.author); } rm[r.author].push(r); });
+      recentSections = ro.map(a => mkRSection(a, rm[a], true));
+    } else {
+      recentSections = [mkRSection('', recentList, false)];
+    }
+
+    const segBtn = (active) => ({ width:'34px', height:'30px', display:'grid', placeItems:'center', borderRadius:'8px', border:'none', cursor:'pointer', fontFamily:'inherit',
+      background: active ? 'var(--accent)' : 'transparent', color: active ? '#fff' : 'var(--text2)' });
+    const toolBtn = (active) => ({ display:'inline-flex', alignItems:'center', gap:'7px', height:'40px', padding:'0 14px', borderRadius:'11px', cursor:'pointer', fontFamily:'inherit', fontSize:'13.5px', fontWeight:500, flexShrink:0,
+      border:'1px solid ' + (active ? accent : 'var(--border)'), background: active ? 'color-mix(in srgb,' + accent + ' 14%, var(--surface))' : 'var(--surface)', color: active ? accent : 'var(--text)' });
+
+    const tabBtn = (active) => ({ display:'inline-flex', alignItems:'center', gap:'7px', height:'38px', padding:'0 15px', borderRadius:'10px', border:'none', cursor:'pointer', fontFamily:'inherit', fontSize:'14px', fontWeight: active?600:500,
+      background: active ? 'color-mix(in srgb,' + accent + ' 16%, transparent)' : 'transparent', color: active ? accent : 'var(--text2)' });
+
+    const mTabBtn = (active) => ({ textAlign:'left', padding:'11px 14px', borderRadius:'9px', border:'none', fontSize:'14px', fontFamily:'inherit', cursor:'pointer', fontWeight: active?600:400,
+      background: active ? 'color-mix(in srgb,' + accent + ' 16%, transparent)':'transparent', color: active ? accent : 'var(--text)' });
+
+    const sw = (on) => ({ width:'44px', height:'26px', borderRadius:'14px', border:'none', cursor:'pointer', position:'relative', padding:0, transition:'background .2s', background: on ? accent : 'var(--border)' });
+    const knob = (on) => ({ position:'absolute', top:'3px', left: on ? '21px' : '3px', width:'20px', height:'20px', borderRadius:'50%', background:'#fff', transition:'left .2s', boxShadow:'0 1px 3px rgba(0,0,0,.3)' });
+
+    const isCollection = s.tab === 'collection';
+
+    return {
+      rootStyle,
+      mainStyle: { maxWidth:'1480px', margin:'0 auto', padding:'clamp(16px,3vw,30px) clamp(14px,3vw,28px) 120px' },
+      // header
+      navStyle: { display: isMobile ? 'none':'flex', gap:'4px', marginLeft:'6px' },
+      actionsStyle: { display: isMobile ? 'none':'flex', gap:'8px', alignItems:'center' },
+      hamburgerStyle: { display: isMobile ? 'grid':'none', placeItems:'center', width:'40px', height:'40px', borderRadius:'10px', border:'1px solid var(--border)', background:'var(--surface2)', color:'var(--text)', cursor:'pointer' },
+      tabCollectionStyle: tabBtn(isCollection),
+      tabRecentStyle: tabBtn(!isCollection),
+      recentCount: s.recent.length,
+      recentBadgeStyle: { fontSize:'10.5px', fontWeight:700, padding:'1px 6px', borderRadius:'20px', background: !isCollection ? accent : 'var(--surface2)', color: !isCollection ? '#fff' : 'var(--text2)' },
+      goCollection: () => this.setState({ tab:'collection', mobileMenu:false }),
+      goRecent: () => this.setState({ tab:'recent', mobileMenu:false }),
+      openKomga: () => this.toast('在新标签页打开 Komga（:25601）'),
+      toggleTheme: () => this.setState(st => ({ theme: st.theme === 'dark' ? 'light':'dark' })),
+      themeLabel: dark ? '深色' : '浅色',
+      sunStyle: { display: dark ? 'none':'block' },
+      moonStyle: { display: dark ? 'block':'none' },
+      openSettings: () => this.setState({ settingsOpen:true, mobileMenu:false }),
+      toggleMobileMenu: () => this.setState(st => ({ mobileMenu: !st.mobileMenu })),
+      // mobile menu
+      mobileMenuStyle: { display: (isMobile && s.mobileMenu) ? 'flex':'none', flexDirection:'column', gap:'2px', position:'fixed', top:'64px', left:'10px', right:'10px', zIndex:39, padding:'8px', borderRadius:'14px', background:'var(--surface)', border:'1px solid var(--border)', boxShadow:'0 20px 50px rgba(0,0,0,.4)', animation:'slideUp .2s ease' },
+      mTabCollectionStyle: mTabBtn(isCollection),
+      mTabRecentStyle: mTabBtn(!isCollection),
+      // sync strip
+      syncStripStyle: { display: s.syncing ? 'block':'none', borderTop:'1px solid var(--border)', background:'var(--surface)' },
+      syncLabel: (s.syncKind === 'recent' ? '正在检索新作品' : '正在同步收藏夹'),
+      syncPctStr: Math.round(s.syncPct) + '%',
+      // stats
+      totalCount: total, downloadedCount: downloaded, pendingCount: pending,
+      // toolbar
+      query: s.query,
+      onSearch: (e) => this.setState({ query: e.target.value }),
+      viewCardBtn: segBtn(s.view === 'card'),
+      viewListBtn: segBtn(s.view === 'list'),
+      setCardView: () => this.setState({ view:'card' }),
+      setListView: () => this.setState({ view:'list' }),
+      toolbarStyle: { display: isCollection ? 'flex':'none', flexWrap:'wrap', alignItems:'center', gap:'10px', marginBottom:'20px' },
+      sortBy: s.sortBy,
+      onSort: (e) => this.setState({ sortBy: e.target.value }),
+      sortSelectStyle: { height:'40px', padding:'0 34px 0 13px', borderRadius:'11px', border:'1px solid var(--border)', background:'var(--surface)', color:'var(--text)', fontSize:'13.5px', fontWeight:500, fontFamily:'inherit', cursor:'pointer', appearance:'none', WebkitAppearance:'none', MozAppearance:'none', outline:'none' },
+      groupBtn: toolBtn(s.grouped),
+      toggleGroup: () => this.setState(st => ({ grouped: !st.grouped })),
+      selectBtn: toolBtn(s.selectMode),
+      toggleSelectMode: () => this.setState(st => ({ selectMode: !st.selectMode, selected: {} })),
+      selectLabel: s.selectMode ? '退出选择' : '选择',
+      syncNow: () => this.syncNow(),
+      syncRecent: () => this.syncRecent(),
+      syncBtnLabel: '同步',
+      downloadAll: () => this.downloadAll(),
+      downloadAllStyle: { display:'inline-flex', alignItems:'center', gap:'7px', height:'40px', padding:'0 16px', borderRadius:'11px', border:'none', cursor:'pointer', fontFamily:'inherit', fontSize:'13.5px', fontWeight:600, color:'#fff', flexShrink:0,
+        background:'linear-gradient(135deg,' + accent + ',' + accent2 + ')', boxShadow:'0 6px 16px color-mix(in srgb,' + accent + ' 40%, transparent)', opacity: pending ? 1 : .5 },
+      dlAllBadge: { fontSize:'11px', fontWeight:700, padding:'1px 7px', borderRadius:'20px', background:'rgba(255,255,255,.25)' },
+      // selection bar
+      selBarStyle: { display: s.selectMode ? 'flex':'none', alignItems:'center', gap:'10px', padding:'11px 15px', borderRadius:'13px', marginBottom:'18px', background:'color-mix(in srgb,' + accent + ' 10%, var(--surface))', border:'1px solid color-mix(in srgb,' + accent + ' 35%, var(--border))', animation:'slideUp .2s ease' },
+      selectedCount: Object.values(s.selected).filter(Boolean).length,
+      batchDelete: () => { const ids = Object.keys(s.selected).filter(k => s.selected[k]); if (!ids.length) { this.toast('未选择任何项'); return; } this.setState(st => ({ mangas: st.mangas.filter(m => !ids.includes(m.id)), selected:{}, selectMode:false })); this.toast('已删除 ' + ids.length + ' 部'); },
+      clearSelection: () => this.setState({ selected:{}, selectMode:false }),
+      // collection
+      collectionWrapStyle: { display: isCollection ? 'block':'none' },
+      sections,
+      isCard: s.view === 'card',
+      isList: s.view === 'list',
+      emptyStyle: { display: (isCollection && sections.length === 0) ? 'flex':'none', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:'80px 20px' },
+      // recent
+      recentWrapStyle: { display: isCollection ? 'none':'block' },
+      recentList,
+      recentSections,
+      rGrouped: s.rGrouped,
+      toggleRGroup: () => this.setState(st => ({ rGrouped: !st.rGrouped })),
+      recentGroupBtn: { display:'inline-flex', alignItems:'center', gap:'6px', height:'36px', padding:'0 12px', borderRadius:'10px', cursor:'pointer', fontFamily:'inherit', fontSize:'13px', fontWeight:500, border:'1px solid ' + (s.rGrouped ? accent : 'var(--border)'), background: s.rGrouped ? 'color-mix(in srgb,' + accent + ' 14%, var(--surface))' : 'var(--surface)', color: s.rGrouped ? accent : 'var(--text)' },
+      // settings
+      settingsOverlayStyle: { display: s.settingsOpen ? 'flex':'none', position:'fixed', inset:0, zIndex:60, background:'rgba(0,0,0,.55)', backdropFilter:'blur(4px)', alignItems:'center', justifyContent:'center', padding:'18px' },
+      settingsPanelStyle: { width:'min(440px,100%)', maxHeight:'90vh', overflow:'auto', borderRadius:'18px', background:'var(--surface)', border:'1px solid var(--border)', boxShadow:'0 30px 80px rgba(0,0,0,.5)', animation:'popIn .2s ease' },
+      closeSettings: () => this.setState({ settingsOpen:false }),
+      stop: (e) => e && e.stopPropagation(),
+      siteUrl: s.siteUrl,
+      onSiteUrl: (e) => this.setState({ siteUrl: e.target.value }),
+      togglePreview: () => this.setState(st => ({ showPreview: !st.showPreview })),
+      previewSwitch: sw(s.showPreview), previewKnob: knob(s.showPreview),
+      groupSwitch: sw(s.grouped), groupKnob: knob(s.grouped),
+      // fab
+      fabStyle: { display: isMobile ? 'grid':'none', placeItems:'center', position:'fixed', right:'18px', bottom:'24px', zIndex:45, width:'56px', height:'56px', borderRadius:'18px', border:'none', cursor:'pointer',
+        background:'linear-gradient(135deg,' + accent + ',' + accent2 + ')', boxShadow:'0 10px 28px color-mix(in srgb,' + accent + ' 50%, transparent)' },
+      // toast
+      toastStyle: { display: s.toast ? 'flex':'none', position:'fixed', bottom: isMobile ? '92px':'28px', left:'50%', transform:'translateX(-50%)', zIndex:70, padding:'11px 20px', borderRadius:'12px', background:'var(--text)', color:'var(--bg)', fontSize:'13px', fontWeight:500, boxShadow:'0 12px 30px rgba(0,0,0,.4)', animation:'slideUp .25s ease', maxWidth:'90vw' },
+      toastMsg: s.toast,
+    };
+  }
+}
+</script>
+</body>
+</html>

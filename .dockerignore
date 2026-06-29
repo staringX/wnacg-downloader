@@ -1,0 +1,41 @@
+# Docker 构建上下文为仓库根目录（方案B 多阶段构建）。
+# 排除无关/庞大目录，避免上传到 daemon，并防止 COPY 误带入 node_modules / venv。
+
+# 版本控制 / CI
+.git
+.gitignore
+.github
+
+# Node（前端依赖与产物在镜像内重新构建）
+**/node_modules
+frontend/dist
+frontend-legacy
+
+# Python
+**/__pycache__
+**/*.py[cod]
+backend/.venv
+backend/venv
+backend/env
+
+# 后端运行时目录（镜像内通过 mkdir 创建）
+backend/data
+backend/downloads
+backend/covers
+backend/logs
+
+# Komga 运行时数据
+komga-config
+komga-data
+
+# 文档与杂项
+docs
+*.md
+.vscode
+.cursor
+.DS_Store
+**/.DS_Store
+
+# 本地环境变量（密钥）
+.env
+.env.example

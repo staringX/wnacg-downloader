@@ -1,0 +1,145 @@
+@import "tailwindcss";
+@import "./styles/tokens.css";
+
+/* ============================================================
+   全局基础样式 — DESIGN_SPEC §2 / §5 / §6.15
+   ============================================================ */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-weight: 400;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  /* §5.3 主题切换过渡 */
+  transition: background 0.3s ease, color 0.3s ease;
+}
+
+/* 数值使用等宽数字 */
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+.font-display {
+  font-family: var(--font-display);
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+}
+
+input,
+select,
+textarea {
+  font-family: inherit;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+/* §6.15 滚动条 */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* §5.1 keyframes */
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
+}
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+@keyframes slideUp {
+  from {
+    transform: translateY(16px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+@keyframes popIn {
+  from {
+    transform: scale(0.92);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+/* ------------------------------------------------------------------
+   大量カード時のメモリ/描画最適化（1000件以上対応）
+   画面外の要素は描画・レイアウト・画像デコードをブラウザがスキップし、
+   離れたら解放できる。contain-intrinsic-size は未描画時のプレースホルダ
+   高さ（auto = 一度描画した実寸を記憶）。仮想化ライブラリ無しで近い効果。
+   ------------------------------------------------------------------ */
+.cv-card {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 320px;
+}
+.cv-card-compact {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 120px;
+}
+.cv-row {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 78px;
+}
+.cv-recent {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 124px;
+}
+
+.anim-spin {
+  animation: spin 1s linear infinite;
+}
+.anim-slideup {
+  animation: slideUp 0.2s ease;
+}
+.anim-popin {
+  animation: popIn 0.2s ease;
+}

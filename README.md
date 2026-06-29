@@ -90,7 +90,7 @@ docker-compose up -d
 
 启动成功后，访问以下地址：
 
-- **前端界面**：http://localhost:13000（或你的服务器IP:13000）
+- **应用（前端 + API 同源）**：http://localhost:18000（或你的服务器IP:18000）
 - **后端API文档**：http://localhost:18000/docs
 - **Komga阅读器**：http://localhost:25601
 
@@ -164,11 +164,14 @@ docker-compose up -d
 
 ```
 manga/
-├── frontend/              # Next.js前端应用
-│   ├── app/              # Next.js App Router
-│   ├── components/       # React组件
-│   ├── hooks/            # 自定义Hooks（任务状态、SSE等）
-│   └── lib/              # 工具函数和API客户端
+├── frontend/              # React + Vite 前端应用（SPA）
+│   ├── src/
+│   │   ├── components/   # 布局与通用组件
+│   │   ├── features/     # 收藏夹 / 最近更新 / 设置
+│   │   ├── hooks/        # 自定义Hooks（任务状态、SSE、下载等）
+│   │   ├── lib/          # API客户端、类型、工具
+│   │   └── styles/       # 设计令牌（CSS变量）
+│   └── (生产构建产物由后端镜像同源配信 = 方案B)
 ├── backend/              # Python FastAPI后端
 │   ├── app/
 │   │   ├── crawler/      # 爬虫模块
@@ -227,8 +230,7 @@ docker-compose up -d
 ```
 
 4. **访问应用**
-- 前端：http://localhost:13000
-- 后端API：http://localhost:18000
+- 应用（前端 + API 同源）：http://localhost:18000
 - API文档（FastAPI自动生成）：http://localhost:18000/docs
 - Komga：http://localhost:25601
 
@@ -255,18 +257,21 @@ export MANGA_PASSWORD=your_password
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-#### 前端
+#### 前端（React + Vite）
 
 1. **安装依赖**
 ```bash
 cd frontend
-pnpm install
+npm install
 ```
 
 2. **启动开发服务器**
 ```bash
-pnpm dev
+npm run dev   # http://localhost:5173，/api 与 /api/events(SSE) 代理到后端:8000
 ```
+
+> 后端地址可用 `VITE_BACKEND_URL` 覆盖，例如 `VITE_BACKEND_URL=http://localhost:18000 npm run dev`。
+> 生产环境无需单独运行前端：`npm run build` 的产物会被打包进后端镜像同源配信（方案B）。
 
 ## ⚙️ 配置说明
 
@@ -282,7 +287,7 @@ pnpm dev
 | `DATABASE_URL` | PostgreSQL数据库连接字符串 | 是（Docker 部署时自动配置） | `backend` 服务的 `environment` 部分 | `postgresql://manga_user:manga_pass@db:5432/manga_db` |
 | `DOWNLOAD_DIR` | 下载目录（容器内路径） | 否 | `backend` 服务的 `environment` 部分 | `/app/downloads` |
 | `COVER_DIR` | 封面目录（容器内路径） | 否 | `backend` 服务的 `environment` 部分 | `/app/covers` |
-| `CORS_ORIGINS` | CORS允许的来源（JSON数组） | 否 | `backend` 服务的 `environment` 部分 | `["http://localhost:13000"]` |
+| `CORS_ORIGINS` | CORS允许的来源（JSON数组；方案B 下前端与API同源，一般无需配置） | 否 | `backend` 服务的 `environment` 部分 | `["http://localhost:18000"]` |
 | `EXCLUDED_CATEGORIES` | 最近更新搜索时排除的分类（JSON数组或逗号分隔） | 否 | `backend` 服务的 `environment` 部分 | `["优秀","全部","一般","真人","同人"]` |
 
 ### 路径配置（群晖NAS用户）

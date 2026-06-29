@@ -109,3 +109,6 @@ backend/logs/*.log.zip
 # Komga 配置和数据目录
 komga-config/
 komga-data/
+
+# 方案B：前端构建产物在 Docker 构建时复制到后端，不纳入版本管理
+backend/app/static/

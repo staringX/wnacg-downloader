@@ -7,6 +7,8 @@ on:
     paths:
       - 'backend/**'
       - 'frontend/**'
+      - 'Dockerfile'
+      - '.dockerignore'
       - '.github/workflows/docker-build-push.yml'
       - 'VERSION'
     tags:
@@ -26,8 +28,8 @@ on:
 
 env:
   DOCKER_REGISTRY: docker.io
+  # 方案B：前端已合并进后端镜像，不再单独构建前端镜像
   BACKEND_IMAGE: staringx/wnacg-downloader-backend
-  FRONTEND_IMAGE: staringx/wnacg-downloader-frontend
 
 jobs:
   build-and-push:
@@ -109,11 +111,12 @@ jobs:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_TOKEN }}
 
-      - name: 构建并推送后端镜像
+      # 方案B：后端镜像（多阶段构建）已内含前端静态资源，单镜像配信前端 + API
+      - name: 构建并推送后端镜像（含前端）
         uses: docker/build-push-action@v5
         with:
-          context: ./backend
-          file: ./backend/Dockerfile
+          context: .
+          file: ./Dockerfile
           push: true
           tags: |
             ${{ env.DOCKER_REGISTRY }}/${{ env.BACKEND_IMAGE }}:${{ steps.version.outputs.VERSION }}
@@ -122,23 +125,9 @@ jobs:
           cache-from: type=registry,ref=${{ env.DOCKER_REGISTRY }}/${{ env.BACKEND_IMAGE }}:buildcache
           cache-to: type=registry,ref=${{ env.DOCKER_REGISTRY }}/${{ env.BACKEND_IMAGE }}:buildcache,mode=max
 
-      - name: 构建并推送前端镜像
-        uses: docker/build-push-action@v5
-        with:
-          context: ./frontend
-          file: ./frontend/Dockerfile
-          push: true
-          tags: |
-            ${{ env.DOCKER_REGISTRY }}/${{ env.FRONTEND_IMAGE }}:${{ steps.version.outputs.VERSION }}
-            ${{ env.DOCKER_REGISTRY }}/${{ env.FRONTEND_IMAGE }}:latest-amd64
-          platforms: linux/amd64
-          cache-from: type=registry,ref=${{ env.DOCKER_REGISTRY }}/${{ env.FRONTEND_IMAGE }}:buildcache
-          cache-to: type=registry,ref=${{ env.DOCKER_REGISTRY }}/${{ env.FRONTEND_IMAGE }}:buildcache,mode=max
-      
       - name: 输出镜像信息
         run: |
-          echo "✅ 镜像构建完成"
-          echo "后端镜像: ${{ env.DOCKER_REGISTRY }}/${{ env.BACKEND_IMAGE }}:${{ steps.version.outputs.VERSION }}"
-          echo "前端镜像: ${{ env.DOCKER_REGISTRY }}/${{ env.FRONTEND_IMAGE }}:${{ steps.version.outputs.VERSION }}"
+          echo "✅ 镜像构建完成（前端已合并进后端镜像）"
+          echo "镜像: ${{ env.DOCKER_REGISTRY }}/${{ env.BACKEND_IMAGE }}:${{ steps.version.outputs.VERSION }}"
           echo "Latest-amd64标签已更新到版本: ${{ steps.version.outputs.VERSION }}"
 

@@ -20,7 +20,10 @@ services:
       - wnacg-network
 
   backend:
-    build: ./backend
+    # 方案B：后端镜像同时配信前端静态资源（多阶段构建，上下文为仓库根目录）
+    build:
+      context: .
+      dockerfile: Dockerfile
     container_name: wnacg-downloader-backend
     environment:
       # 使用PostgreSQL数据库
@@ -42,23 +45,11 @@ services:
       # 封面图片
       - ./backend/covers:/app/covers
     ports:
+      # 前端 + API 同一进程同源配信（访问入口）
       - "18000:8000"
     depends_on:
       db:
         condition: service_healthy
-    restart: unless-stopped
-    networks:
-      - wnacg-network
-
-  frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-    container_name: wnacg-downloader-frontend
-    ports:
-      - "13000:3000"
-    depends_on:
-      - backend
     restart: unless-stopped
     networks:
       - wnacg-network

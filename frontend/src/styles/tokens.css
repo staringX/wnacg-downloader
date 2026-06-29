@@ -1,0 +1,55 @@
+/* ============================================================
+   设计令牌 (Design Tokens) — DESIGN_SPEC §1
+   主题切换仅替换以下 CSS 变量值。所有元素通过 var() 引用。
+   ============================================================ */
+
+:root,
+[data-theme="dark"] {
+  /* §1.1 暗色主题（默认） */
+  --bg: #0a0a0f;
+  --surface: #141420;
+  --surface2: #1c1c2b;
+  --border: #262636;
+  --text: #f0f0f5;
+  --text2: #9a9ab0;
+}
+
+[data-theme="light"] {
+  /* §1.2 亮色主题 */
+  --bg: #f4f4f8;
+  --surface: #ffffff;
+  --surface2: #f0f0f4;
+  --border: #e4e4ec;
+  --text: #16161d;
+  --text2: #71718a;
+}
+
+:root {
+  /* §1.3 强调色 / 状态色（主题通用） */
+  --accent: #ec4899;
+  --accent2: color-mix(in srgb, var(--accent), white 22%);
+  --state-downloaded: #22c55e; /* 已下载（绿） */
+  --state-downloading: #3b82f6; /* 下载中（蓝） */
+  --state-pending: var(--accent); /* 待下载 */
+  --danger: #ef4444;
+
+  /* 主渐变 */
+  --gradient: linear-gradient(135deg, var(--accent), var(--accent2));
+
+  /* §1.5 半透明 / 特殊 */
+  --header-bg: color-mix(in srgb, var(--surface) 88%, transparent);
+  --cover-scrim: linear-gradient(180deg, transparent 35%, rgba(0, 0, 0, 0.72));
+  --accent-soft: color-mix(in srgb, var(--accent) 14%, var(--surface));
+  --accent-softborder: color-mix(in srgb, var(--accent) 35%, var(--border));
+
+  --font-sans: "Noto Sans SC", system-ui, sans-serif;
+  --font-display: "Space Grotesk", sans-serif;
+}
+
+/* §1.4 封面占位渐变（按 index % 6 循环） */
+.cover-grad-0 { background: linear-gradient(135deg, #ec4899, #7c3aed); }
+.cover-grad-1 { background: linear-gradient(135deg, #3b82f6, #06b6d4); }
+.cover-grad-2 { background: linear-gradient(135deg, #f59e0b, #ef4444); }
+.cover-grad-3 { background: linear-gradient(135deg, #10b981, #3b82f6); }
+.cover-grad-4 { background: linear-gradient(135deg, #8b5cf6, #ec4899); }
+.cover-grad-5 { background: linear-gradient(135deg, #0ea5e9, #6366f1); }

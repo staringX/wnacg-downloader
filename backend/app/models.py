@@ -47,7 +47,10 @@ class RecentUpdate(Base):
     updated_at = Column(DateTime, nullable=True, index=True)  # 更新日期（用于筛选）
     cover_image_url = Column(String, nullable=True)  # 封面图片URL
     cover_image_path = Column(String, nullable=True)  # 封面图片本地路径
-    
+
+    # 站点收藏状态（最近更新卡片的爱心；与 Manga.is_favorited 含义一致）
+    is_favorited = Column(Boolean, default=False, index=True)
+
     # 下载相关（可选，如果用户想下载最近更新的作品）
     is_downloaded = Column(Boolean, default=False, index=True)
     downloaded_at = Column(DateTime, nullable=True)
