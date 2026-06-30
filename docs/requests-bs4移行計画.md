@@ -17,6 +17,10 @@
 | ブランチ戦略 | `feature/requests-bs4` で作業。フェーズ毎に PR。Selenium 実装は最終フェーズまで残す。 |
 | ロールバック | 各フェーズは独立 PR。問題時はファサードの実装切替フラグ（§6）で即時切戻し可能。 |
 
+**リグレッション基盤（移行前に整備済み・2026-06-30）**: [移行テスト戦略.md](./移行テスト戦略.md) 参照。
+クローラ解析を純関数 [app/crawler/parsers.py](../backend/app/crawler/parsers.py) に切り出し、
+保存した HTML フィクスチャに対するゴールデンマスター・テスト（[tests/test_crawler_golden.py](../backend/tests/test_crawler_golden.py)、現状 11 passed）で現状動作を固定済み。各フェーズで `pytest tests/` を回し、出力差分ゼロを維持する。
+
 移行対象ファイル:
 - 置換: [browser.py](../backend/app/crawler/browser.py) / [collection.py](../backend/app/crawler/collection.py) / [manga_details.py](../backend/app/crawler/manga_details.py) / [search.py](../backend/app/crawler/search.py) / [favorite_service.py](../backend/app/services/favorite_service.py)
 - 改修: [base.py](../backend/app/crawler/base.py)（内部実装の差替）、[requirements.txt](../backend/requirements.txt)、[Dockerfile](../backend/Dockerfile)
@@ -255,22 +259,39 @@ class MangaCrawler:
 
 ---
 
-## フェーズ0結果記入欄（実施後に追記）
+## フェーズ0結果記入欄（実施済み: 2026-06-30）
 
-| 検証 | 結果(OK/NG) | メモ（HTML 抜粋・所要・備考） |
-|------|:----------:|------------------------------|
-| T1 ドメイン解決 | | |
-| T2 ログイン(R1) | | 実 action= , 必須フィールド= |
-| T3 アンチボット(R3) | | |
-| T4 一覧 | | 取得件数= |
-| T5 詳細 | | 欠落フィールド= |
-| T6 原図所在(R2) | | 静的/JS= |
-| T7 原図 DL | | content-type= , size= |
-| T8 検索 | | |
-| T9 収藏フォーム | | option 数= |
-| T10 文字コード(R4) | | 判定 encoding= |
-| T11 セッション維持(R6) | | |
-| **総合判定** | | Go / 部分Go / No-Go |
+実行: `backend/.venv/bin/python scripts/poc_requests_bs4.py`（[scripts/poc_requests_bs4.py](../backend/scripts/poc_requests_bs4.py)）
+
+| 検証 | 結果 | メモ（実測） |
+|------|:----:|------------------------------|
+| T1 ドメイン解決 | ✅OK | 発布ページ `wn01.link` → 候補 4 件、有効 `https://www.wn07.cfd` を取得 |
+| T2 ログイン(R1) | ✅OK | **requests でログイン成立**。action=`/users-check_login.html`、フィールド=`login_name`/`login_pass`/`normal=1`(hidden)/`remember_pass`。Cookie `MPIC_bnS5` 発行。書架（`users-users_fav-c-` 多数）到達で確認 |
+| T3 アンチボット(R3) | ✅OK※ | **当初 NG は誤検知**。`cloudflare-static/email-decode.min.js`（良性のメール難読化）に語が一致しただけ。実際の JS チャレンジ/キャプチャは無し。CF CDN 配下だが素の HTTP で全ページ取得可 |
+| T4 一覧 | ✅OK | 作者カテゴリ 65 件、1 ページ目漫画 20 件を抽出 |
+| T5 詳細 | △要調整 | データは静的 HTML に**存在**するが**現行セレクタが古い**。下記「セレクタ更新事項」参照。title/date は取得、頁数・分類は `label` 内、封面サムネ CDN が変更 |
+| T6 原図所在(R2) | ✅OK | **原図 URL は静的 HTML に存在**（`//img5.wnimg1.ru/data/2390/91/231.png`）。view ページ `img[src*='wnimg']` かつ `/data/` 非 `/t/` で取得可 |
+| T7 原図 DL | ✅OK | requests GET で 200 / `image/png` / 1,844,948B 取得成功 |
+| T8 検索 | ✅OK | `ul.col_2 > li.cate-*` を 8 件取得 |
+| T9 収藏フォーム | ✅OK※ | 当初「option 0」は対象が**既収藏**で `你已經收藏過了` が返ったため（=エンドポイントは認証セッションに正しく応答）。XHR ヘッダ付与で確認 |
+| T10 文字コード(R4) | ✅OK | UTF-8 自動判定、日本語/中文タイトル文字化けなし |
+| T11 セッション維持(R6) | ✅OK | 同一 `Session` で T2→T9 を連続実行、未ログインに戻らず |
+| **総合判定** | **✅ Go** | ログイン・全ページ取得・**原図 URL の静的取得が成立**。requests+BS4 への**全面移行は可能**。ブラウザ不要。 |
+
+> ⚠️ スクリプト末尾の自動判定は当初「No-Go」と表示したが、これは T3 の誤検知（良性 CF スクリプトへの語一致）が原因。検知ロジックは修正済み。**正しい判定は Go**。
+
+### フェーズ0 で判明したセレクタ更新事項（重要）
+
+実 HTML（base=`www.wn07.cfd`）で確認した、現行 Selenium コードと異なる点。**requests 移行版・現行 Selenium 版の双方で要修正**:
+
+| 対象 | 現行コードの想定 | 実 HTML での実態 | 対応 |
+|------|----------------|-----------------|------|
+| 詳細ページ頁数 | `p.l_detla`（[manga_details.py:98](../backend/app/crawler/manga_details.py#L98)） | 詳細ページに `p.l_detla` は**無い**。`label` に `頁數：24P` | `label` テキストから正規表現抽出に変更 |
+| 詳細ページ分類 | `//label[contains(.,'分類：')]` | `label` に `分類：雜誌&短篇／漢化`（一致） | 維持可（BS4 化） |
+| 封面サムネ | `img[src*='wnimg']`（[manga_details.py:126](../backend/app/crawler/manga_details.py#L126)） | サムネ CDN が **`//t4.wnacgimg.date/data/t/...`** に変更。`wnimg` に**マッチしない** | セレクタを `wnacgimg.date` 含む or `/data/t/` ベースに更新 |
+| 原図（view ページ） | `img[src*='wnimg']` + `/data/` 非 `/t/` | 原図は `//img5.wnimg1.ru/data/...`（`wnimg` 一致・現行ロジック有効） | 維持可 |
+
+> ※ 封面サムネ CDN 変更は、**現行の本番環境でも封面取得が失敗している可能性**を示唆する。移行とは別に確認・修正推奨。
 
 ---
 
