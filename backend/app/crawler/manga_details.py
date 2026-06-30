@@ -91,18 +91,31 @@ class MangaDetailsCrawler:
             except:
                 pass
             
-            # 获取页数（使用class名称，避免汉字字符串）
+            # 获取页数
+            # 注意：详情页已不再使用 p.l_detla（站点改版），页数现位于 label「頁數：24P」中。
+            # 优先尝试 p.l_detla（兼容旧版/列表页），失败则从 label 文本回退提取。
             page_count = None
             try:
-                # 使用 p.l_detla class 查找页数信息
                 page_elem = self.driver.find_element(By.CSS_SELECTOR, "p.l_detla")
                 page_text = page_elem.text  # 例如: "頁數：20P"
-                # 从文本中提取数字（格式：頁數：20 或 頁數：20P）
                 page_match = re.search(r'(\d+)\s*P?', page_text)
                 if page_match:
                     page_count = int(page_match.group(1))
-            except Exception as e:
-                logger.debug(f"    获取页数失败: {get_error_message(e)}")
+            except Exception:
+                pass
+
+            if page_count is None:
+                try:
+                    # 从所有 label 文本中查找「頁數：N」/「页数：N」
+                    for label in self.driver.find_elements(By.CSS_SELECTOR, "label"):
+                        label_text = label.text or ""
+                        if "頁數" in label_text or "页数" in label_text:
+                            page_match = re.search(r'(\d+)\s*P?', label_text)
+                            if page_match:
+                                page_count = int(page_match.group(1))
+                                break
+                except Exception as e:
+                    logger.debug(f"    获取页数失败: {get_error_message(e)}")
             
             # 获取上传日期（使用class名称，避免汉字字符串）
             updated_at = None
@@ -119,15 +132,27 @@ class MangaDetailsCrawler:
             except Exception as e:
                 logger.debug(f"    获取上传日期失败: {get_error_message(e)}")
             
-            # 获取封面图片URL - 取第一张图片的缩略图
+            # 获取封面图片URL
+            # 注意：站点改版后缩略图 CDN 已从 wnimg 变更为 wnacgimg.date 等，
+            #       旧选择器 img[src*='wnimg'] 在详情页已无法匹配缩略图。
+            #       封面位于专用容器 div.asTBcell.uwthumb 内，最为可靠。
             cover_url = None
             try:
-                # 查找所有图片，通常第一张是封面
-                images = self.driver.find_elements(By.CSS_SELECTOR, "img[src*='wnimg']")
-                if images:
-                    cover_url = images[0].get_attribute('src')
-            except Exception as e:
-                logger.debug(f"    获取封面失败: {get_error_message(e)}")
+                cover_elem = self.driver.find_element(By.CSS_SELECTOR, ".uwthumb img")
+                cover_url = cover_elem.get_attribute('src')
+            except Exception:
+                # 回退：匹配作品图片数据路径（/data/ 缩略图或原图，含新旧 CDN）
+                try:
+                    images = self.driver.find_elements(
+                        By.CSS_SELECTOR, "img[src*='/data/']")
+                    if images:
+                        cover_url = images[0].get_attribute('src')
+                except Exception as e:
+                    logger.debug(f"    获取封面失败: {get_error_message(e)}")
+
+            # 规范化协议相对 URL（//host/... → https://host/...）
+            if cover_url and cover_url.startswith('//'):
+                cover_url = f"https:{cover_url}"
             
             # 获取分类信息
             category = None
