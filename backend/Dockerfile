@@ -2,20 +2,11 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# 安装系统依赖和Chromium（支持ARM架构）
+# 安装系统依赖（Chromium 已移除：爬虫改用 requests + BeautifulSoup）
 RUN apt-get update && apt-get install -y \
-    wget \
-    gnupg \
-    unzip \
     curl \
     ca-certificates \
-    chromium \
-    chromium-driver \
     && rm -rf /var/lib/apt/lists/*
-
-# 创建符号链接，使Selenium可以找到chromium
-RUN ln -s /usr/bin/chromium /usr/bin/chromium-browser || true \
-    && ln -s /usr/bin/chromedriver /usr/local/bin/chromedriver || true
 
 # 复制依赖文件
 COPY requirements.txt .

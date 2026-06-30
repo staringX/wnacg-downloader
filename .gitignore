@@ -96,10 +96,10 @@ covers/
 *.backup_*
 *_get_collection_new.py
 
-# 测试文件
-test_*.py
-*_test.py
-test_db_init.py
+# アドホックなテストスクリプト（ルート直下のみ。テストスイート backend/tests/ は追跡する）
+/test_*.py
+/*_test.py
+/test_db_init.py
 
 # 日志文件（保留logs目录结构，但忽略日志内容）
 backend/logs/*.log
@@ -112,3 +112,6 @@ komga-data/
 
 # 方案B：前端构建产物在 Docker 构建时复制到后端，不纳入版本管理
 backend/app/static/
+
+# pytest
+.pytest_cache/
