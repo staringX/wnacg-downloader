@@ -11,6 +11,7 @@ from typing import Dict, List, Optional
 
 from app.config import settings
 from app.crawler import parsers
+from app.crawler.rate_limiter import site_limiter
 from app.utils.logger import logger, get_error_message
 
 
@@ -100,6 +101,7 @@ class MangaDetailsCrawler:
             visited.add(current_url)
             logger.info(f"  扫描第 {page_num} 页: {current_url}")
             try:
+                site_limiter.acquire()  # ダウンロード時のサイト負荷配慮（最小間隔）
                 html = self.client.get_html(current_url)
             except Exception as e:
                 logger.warning(f"    页面获取失败: {get_error_message(e)}")
@@ -129,6 +131,7 @@ class MangaDetailsCrawler:
     def _fetch_original(self, idx: int, view_url: str) -> Optional[Dict]:
         """単一 view ページから原図 URL を取得（スレッド関数）"""
         try:
+            site_limiter.acquire()  # ダウンロード時のサイト負荷配慮（並行でもレート頭打ち）
             html = self.client.get_html(view_url)
             original_url = parsers.parse_original_image(html)
             if not original_url:

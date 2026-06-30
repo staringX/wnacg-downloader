@@ -8,3 +8,6 @@ import os
 
 os.environ.setdefault("MANGA_USERNAME", "test_user")
 os.environ.setdefault("MANGA_PASSWORD", "test_pass")
+# テストは実ネットワークを叩かないため、レート制限の sleep を無効化（高速・決定的）
+os.environ.setdefault("REQUEST_MIN_INTERVAL", "0")
+os.environ.setdefault("IMAGE_REQUEST_MIN_INTERVAL", "0")

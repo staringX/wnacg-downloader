@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 from app.database import SessionLocal
 from app.models import Manga
 from app.crawler.base import MangaCrawler
+from app.crawler.rate_limiter import image_limiter
 from app.config import settings
 from app.utils.logger import logger, get_error_message
 from app.services.task_manager import TaskManager
@@ -41,6 +42,7 @@ class MangaDownloader:
             headers = {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
             }
+            image_limiter.acquire()  # CDN 负载配慮: 最小间隔を空ける
             response = requests.get(url, headers=headers, timeout=30)
             response.raise_for_status()
             
