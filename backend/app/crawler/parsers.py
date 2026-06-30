@@ -1,18 +1,15 @@
 """HTML 解析の純関数群（ブラウザ非依存・副作用なし）
 
-移行方針: Selenium が取得した DOM / requests が取得した HTML のどちらに対しても、
-ここに集約した純粋な解析関数を適用する。入力は HTML 文字列、出力は JSON 化可能な
-プレーンな dict/list。これによりゴールデンマスター・テストで「現状の解析挙動」を固定し、
-requests+BeautifulSoup 移行後も同一出力を再現できることを保証する。
+入力は HTML 文字列、出力は JSON 化可能なプレーンな dict/list。副作用を持たない純関数群とし、
+ゴールデンマスター・テストで解析挙動を固定する。
 
-セレクタは現行クローラ（collection.py / manga_details.py / search.py）に忠実に合わせ、
-フェーズ0 で判明した改版（封面 CDN 変更・詳細頁数の label 移動）の修正を反映する。
+セレクタは実 HTML（封面 CDN 変更・詳細頁数の label 移動などの改版）に合わせて維持する。
 """
 import re
 from typing import Dict, List, Optional
 from bs4 import BeautifulSoup
 
-# 収藏カテゴリ抽出時に除外する作者以外の分類名（collection.py と一致）
+# 収藏カテゴリ抽出時に除外する作者以外の分類名
 EXCLUDED_CATEGORY_NAMES = ["全部", "管理分類", "書架", "书架", "我的書架"]
 
 
@@ -26,7 +23,8 @@ def _abs_url(href: Optional[str], base: str) -> Optional[str]:
         return None
     base = base.rstrip("/")
     if href.startswith("//"):
-        return f"https:{href}"
+        # 協議相対 URL。多重スラッシュ（例: ////host/...）はブラウザ解決と同様に正規化
+        return f"https://{href.lstrip('/')}"
     if href.startswith("http"):
         return href
     if href.startswith("/"):
@@ -205,6 +203,33 @@ def parse_next_page(html: str, base: str, kind: str = "fav") -> Optional[str]:
     soup = _soup(html)
     nxt = soup.select_one(".paginator .next > a")
     return _abs_url(nxt.get("href"), base) if nxt and nxt.get("href") else None
+
+
+def parse_search_next_page(html: str, base: str, current_page: int) -> Optional[str]:
+    """検索結果ページの「次ページ」URL を数字ページネーションから解決
+
+    検索結果には「後頁」リンクが無く数字ページのみ。現行 search.py のロジックに準拠し、
+    .thispage で現在ページを補正し、p=現在+1 かつ q= を含むリンクを返す。
+    """
+    soup = _soup(html)
+    paginator = soup.select_one(".paginator")
+    if not paginator:
+        return None
+    tp = paginator.select_one(".thispage")
+    if tp:
+        try:
+            current_page = int(tp.get_text(strip=True))
+        except (ValueError, TypeError):
+            pass
+    target = current_page + 1
+    for a in paginator.select("a[href]"):
+        full = _abs_url(a.get("href"), base)
+        if not full:
+            continue
+        m = re.search(r"[&?]p=(\d+)", full)
+        if m and int(m.group(1)) == target and "q=" in full:
+            return full
+    return None
 
 
 # ---------------------------------------------------------------------------

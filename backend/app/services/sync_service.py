@@ -282,16 +282,6 @@ class SyncService:
             
             TaskManager.update_task(db, task_id, status="running", message="开始同步收藏夹...")
             
-            try:
-                from selenium.webdriver.common.by import By
-                SELENIUM_AVAILABLE = True
-            except ImportError:
-                SELENIUM_AVAILABLE = False
-            
-            if not SELENIUM_AVAILABLE:
-                TaskManager.update_task(db, task_id, status="failed", error_message="Selenium未安装，无法使用爬虫功能")
-                return
-            
             # 🔍 第一步：验证本地文件完整性
             try:
                 verified_count, fixed_count, missing_files = SyncService.verify_local_files(db)
