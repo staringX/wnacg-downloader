@@ -1,6 +1,5 @@
-import { Search, LayoutGrid, List, ChevronDown, Users, CheckSquare, RefreshCw, Download } from "lucide-react"
-import type { SortMode } from "../logic"
-import { SORT_OPTIONS } from "../logic"
+import { Search, LayoutGrid, List, Users, CheckSquare, RefreshCw, Download } from "lucide-react"
+import { AuthorFilter } from "@/components/common/author-filter"
 
 export type ViewMode = "card" | "list"
 
@@ -9,14 +8,17 @@ interface ToolbarProps {
   onSearch: (v: string) => void
   view: ViewMode
   onViewChange: (v: ViewMode) => void
-  sort: SortMode
-  onSortChange: (v: SortMode) => void
+  authors: string[]
+  selectedAuthors: Set<string>
+  onAuthorsChange: (next: Set<string>) => void
   groupByAuthor: boolean
   onToggleGroup: () => void
   selectionMode: boolean
   onToggleSelection: () => void
   onSync: () => void
   isSyncing: boolean
+  syncDisabled: boolean
+  downloadDisabled: boolean
   onDownloadAll: () => void
   pendingCount: number
 }
@@ -53,14 +55,17 @@ export function CollectionToolbar(props: ToolbarProps) {
     onSearch,
     view,
     onViewChange,
-    sort,
-    onSortChange,
+    authors,
+    selectedAuthors,
+    onAuthorsChange,
     groupByAuthor,
     onToggleGroup,
     selectionMode,
     onToggleSelection,
     onSync,
     isSyncing,
+    syncDisabled,
+    downloadDisabled,
     onDownloadAll,
     pendingCount,
   } = props
@@ -138,42 +143,8 @@ export function CollectionToolbar(props: ToolbarProps) {
         {segBtn("list", List)}
       </div>
 
-      {/* 排序 */}
-      <div style={{ position: "relative" }}>
-        <select
-          value={sort}
-          onChange={(e) => onSortChange(e.target.value as SortMode)}
-          style={{
-            height: 40,
-            padding: "0 34px 0 13px",
-            borderRadius: 11,
-            border: "1px solid var(--border)",
-            background: "var(--surface)",
-            color: "var(--text)",
-            fontSize: 13.5,
-            appearance: "none",
-            WebkitAppearance: "none",
-            outline: "none",
-          }}
-        >
-          {SORT_OPTIONS.map((o) => (
-            <option key={o.value} value={o.value}>
-              {o.label}
-            </option>
-          ))}
-        </select>
-        <ChevronDown
-          size={14}
-          style={{
-            position: "absolute",
-            right: 12,
-            top: "50%",
-            transform: "translateY(-50%)",
-            color: "var(--text2)",
-            pointerEvents: "none",
-          }}
-        />
-      </div>
+      {/* 作者筛选（多选 + 作者搜索） */}
+      <AuthorFilter authors={authors} selected={selectedAuthors} onChange={onAuthorsChange} />
 
       {/* 按作者分组 */}
       <button style={activeToggleStyle(groupByAuthor)} onClick={onToggleGroup}>
@@ -188,7 +159,12 @@ export function CollectionToolbar(props: ToolbarProps) {
       </button>
 
       {/* 同步 */}
-      <button style={toolBtn} onClick={onSync}>
+      <button
+        style={{ ...toolBtn, opacity: syncDisabled ? 0.5 : 1 }}
+        onClick={onSync}
+        disabled={syncDisabled}
+        title={syncDisabled ? "下载或更新进行中，暂不可更新" : undefined}
+      >
         <RefreshCw size={16} className={isSyncing ? "anim-spin" : undefined} />
         同步
       </button>
@@ -196,14 +172,15 @@ export function CollectionToolbar(props: ToolbarProps) {
       {/* 下载全部 */}
       <button
         onClick={onDownloadAll}
-        disabled={pendingCount === 0}
+        disabled={pendingCount === 0 || downloadDisabled}
+        title={downloadDisabled ? "更新进行中，暂不可下载" : undefined}
         style={{
           ...toolBtn,
           border: "none",
           background: "var(--gradient)",
           color: "#fff",
           fontWeight: 600,
-          opacity: pendingCount === 0 ? 0.5 : 1,
+          opacity: pendingCount === 0 || downloadDisabled ? 0.5 : 1,
           boxShadow: "0 6px 16px color-mix(in srgb, var(--accent) 40%, transparent)",
         }}
       >

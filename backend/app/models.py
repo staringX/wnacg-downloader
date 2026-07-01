@@ -1,5 +1,5 @@
 from sqlalchemy import Column, String, Integer, Boolean, DateTime, BigInteger
-from sqlalchemy.sql import func
+from sqlalchemy.sql import func, expression
 from app.database import Base
 import uuid
 
@@ -18,6 +18,7 @@ class Manga(Base):
     file_size = Column(BigInteger, nullable=True)  # 文件大小（字节）
     page_count = Column(Integer, nullable=True)  # 页数
     updated_at = Column(DateTime, nullable=True)  # 更新日期
+    category = Column(String, nullable=True)  # 详情页「分類」欄（例「雜誌&短篇／漢化」）。スラッシュ区切りでタグ表示に使う
     is_downloaded = Column(Boolean, default=False, index=True)
     downloaded_at = Column(DateTime, nullable=True)
     cover_image_url = Column(String, nullable=True)  # 封面图片URL
@@ -97,6 +98,16 @@ class AppConfig(Base):
     
     # 手动设置的漫画网站链接
     manual_manga_site_url = Column(String, nullable=True)
-    
+
+    # 最近更新の検索で「漢化」作品のみ取得するか（既定 True）
+    # server_default により既存行にもマイグレーションで True が入る
+    recent_updates_hanhua_only = Column(
+        Boolean, nullable=False, default=True, server_default=expression.true()
+    )
+
+    # 各画面の「最后更新」表示用：同期タスクが最後に完了した時刻
+    collection_synced_at = Column(DateTime, nullable=True)
+    recent_synced_at = Column(DateTime, nullable=True)
+
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())

@@ -34,7 +34,8 @@ class MangaResponse(MangaBase):
     cover_image_path: Optional[str] = None
     preview_image_url: Optional[str] = None  # 前端期望的字段名
     is_favorited: bool = False  # 是否已收藏到网站
-    
+    category: Optional[str] = None  # 详情页「分類」欄（前端でスラッシュ分割してタグ表示）
+
     class Config:
         from_attributes = True
     
@@ -43,7 +44,9 @@ class MangaResponse(MangaBase):
         """自定义ORM转换，确保字段映射正确"""
         # 安全获取 is_favorited 属性（RecentUpdate 模型没有这个字段）
         is_favorited = getattr(obj, 'is_favorited', False) or False
-        
+        # category は Manga のみ（RecentUpdate には無いので getattr で安全に取得）
+        category = getattr(obj, 'category', None)
+
         # 兼容Pydantic v2和v1
         try:
             # 尝试使用Pydantic v2的model_validate
@@ -61,6 +64,7 @@ class MangaResponse(MangaBase):
                 'cover_image_path': getattr(obj, 'cover_image_path', None),
                 'preview_image_url': obj.cover_image_url,  # 使用cover_image_url作为预览图
                 'is_favorited': is_favorited,
+                'category': category,
             })
         except AttributeError:
             # 回退到直接构造
@@ -78,6 +82,7 @@ class MangaResponse(MangaBase):
                 cover_image_path=getattr(obj, 'cover_image_path', None),
                 preview_image_url=obj.cover_image_url,
                 is_favorited=is_favorited,
+                category=category,
             )
 
 
@@ -134,7 +139,12 @@ class TaskCreateResponse(BaseModel):
 class AppConfigResponse(BaseModel):
     """应用配置响应"""
     manual_manga_site_url: Optional[str] = None
-    
+    # 最近更新の検索で「漢化」作品のみ取得するか（既定 True）
+    recent_updates_hanhua_only: bool = True
+    # 各画面の「最后更新」表示用（同期タスクが最後に完了した時刻）
+    collection_synced_at: Optional[datetime] = None
+    recent_synced_at: Optional[datetime] = None
+
     class Config:
         from_attributes = True
 
@@ -142,3 +152,4 @@ class AppConfigResponse(BaseModel):
 class AppConfigUpdate(BaseModel):
     """更新应用配置请求"""
     manual_manga_site_url: Optional[str] = None
+    recent_updates_hanhua_only: Optional[bool] = None

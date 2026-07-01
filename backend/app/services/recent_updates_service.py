@@ -3,17 +3,30 @@ from sqlalchemy.orm import Session
 from typing import List
 from datetime import datetime
 from app.database import SessionLocal
-from app.models import Manga, RecentUpdate
+from app.models import Manga, RecentUpdate, AppConfig
 from app.crawler.base import MangaCrawler
+from app.crawler.rate_limiter import site_limiter
 from app.config import settings
 from app.utils.logger import logger, get_error_message
 from app.services.task_manager import TaskManager
 from app.services.recent_updates_singleton import recent_updates_singleton
+from app.services.sync_service import _record_synced_at
+
+# 詳細ページの「分類」欄がこれらの文字列を含む作品のみ「漢化」とみなす（簡体・繁体両対応）
+HANHUA_MARKERS = ("漢化", "汉化")
+
+
+def _is_hanhua(crawler, manga_url: str) -> bool:
+    """詳細ページの「分類」欄に「漢化/汉化」が含まれるか判定"""
+    site_limiter.acquire()  # サイト負荷への配慮（詳細ページ取得の最小間隔）
+    details = crawler.get_manga_details(manga_url)
+    category = (details or {}).get("category") or ""
+    return any(marker in category for marker in HANHUA_MARKERS)
 
 
 class RecentUpdatesService:
     """最近更新业务服务类"""
-    
+
     @staticmethod
     def execute_sync_recent_updates_task(task_id: str, db: Session = None):
         """执行同步最近更新任务（后台任务）"""
@@ -27,7 +40,14 @@ class RecentUpdatesService:
                 return
             
             TaskManager.update_task(db, task_id, status="running", message="开始同步最近更新...")
-            
+
+            # 「漢化」のみ取得するか（既定 True。None も True 扱い）
+            app_config = db.query(AppConfig).filter(AppConfig.id == "singleton").first()
+            hanhua_only = True
+            if app_config is not None and app_config.recent_updates_hanhua_only is not None:
+                hanhua_only = app_config.recent_updates_hanhua_only
+            logger.info(f"最近更新同步：仅「漢化」过滤 = {hanhua_only}")
+
             # 获取所有已收藏的作者
             authors = db.query(Manga.author).distinct().all()
             author_list = [a[0] for a in authors]
@@ -84,9 +104,25 @@ class RecentUpdatesService:
                     if not new_mangas:
                         logger.info(f"  作者 {author} 没有找到新更新")
                         continue
-                    
+
                     logger.info(f"  作者 {author} 找到 {len(new_mangas)} 个新更新")
-                    
+
+                    # 「漢化」フィルタ：詳細ページの分類欄で判定し、漢化作品のみ残す
+                    if hanhua_only:
+                        before = len(new_mangas)
+                        kept = []
+                        for md in new_mangas:
+                            try:
+                                if _is_hanhua(crawler, md["manga_url"]):
+                                    kept.append(md)
+                            except Exception as e:
+                                logger.warning(
+                                    f"    漢化判定失败，跳过: {md.get('title', 'Unknown')[:40]} - {get_error_message(e)}")
+                        new_mangas = kept
+                        logger.info(f"  作者 {author} 漢化过滤: {before} → {len(new_mangas)}")
+                        if not new_mangas:
+                            continue
+
                     # 保存新更新到数据库
                     for manga_data in new_mangas:
                         # 检查是否已存在（通过manga_url）
@@ -145,7 +181,10 @@ class RecentUpdatesService:
                     continue
             
             crawler.close()
-            
+
+            # 最后更新时刻を記録（画面表示用）
+            _record_synced_at(db, "recent")
+
             # 任务完成
             TaskManager.update_task(
                 db, task_id,

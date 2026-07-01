@@ -1,5 +1,5 @@
 import { Library, Clock, ExternalLink, Sun, Moon, Settings, Menu } from "lucide-react"
-import { useTheme } from "@/components/common/theme-provider"
+import { useTheme } from "@/components/common/theme-context"
 import { openKomga } from "@/lib/komga"
 
 export type TabKey = "collection" | "updates"
@@ -10,7 +10,7 @@ interface HeaderProps {
   updatesCount: number
   isMobile: boolean
   onOpenSettings: () => void
-  onOpenMobileMenu: () => void
+  onToggleMobileMenu: () => void
 }
 
 const iconBtn: React.CSSProperties = {
@@ -31,7 +31,7 @@ export function Header({
   updatesCount,
   isMobile,
   onOpenSettings,
-  onOpenMobileMenu,
+  onToggleMobileMenu,
 }: HeaderProps) {
   const { theme, toggleTheme } = useTheme()
 
@@ -135,7 +135,7 @@ export function Header({
         <div style={{ flex: 1 }} />
 
         {isMobile ? (
-          <button onClick={onOpenMobileMenu} style={{ ...iconBtn, width: 40, height: 40 }} aria-label="菜单">
+          <button onClick={onToggleMobileMenu} style={{ ...iconBtn, width: 40, height: 40 }} aria-label="菜单">
             <Menu size={20} />
           </button>
         ) : (

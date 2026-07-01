@@ -3,10 +3,16 @@ import { apiClient } from "./client"
 
 export interface AppConfig {
   manual_manga_site_url: string | null
+  // 最近更新の検索で「漢化」作品のみ取得するか（既定 true）
+  recent_updates_hanhua_only: boolean
+  // 各画面の「最后更新」表示用（ISO 文字列 or null）
+  collection_synced_at: string | null
+  recent_synced_at: string | null
 }
 
 export interface AppConfigUpdate {
   manual_manga_site_url?: string | null
+  recent_updates_hanhua_only?: boolean
 }
 
 export const settingsApi = {

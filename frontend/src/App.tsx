@@ -11,7 +11,7 @@ import { useAppData } from "@/hooks/use-app-data"
 import { useDownloads } from "@/hooks/use-downloads"
 import { useSync } from "@/hooks/use-sync"
 import { useIsMobile } from "@/hooks/use-mobile"
-import { useToast } from "@/components/common/toast"
+import { useToast } from "@/components/common/toast-context"
 import { mangaApi, downloadApi, recentUpdatesApi } from "@/lib/api"
 import { openOriginalSite } from "@/lib/komga"
 import type { MangaItem, RecentUpdate } from "@/lib/types"
@@ -29,6 +29,7 @@ export function App() {
     setSettings,
     refetchMangas,
     refetchUpdates,
+    refetchSettings,
     removeManga,
     removeMangas,
   } = useAppData()
@@ -47,10 +48,27 @@ export function App() {
   }
 
   const { byManga: downloads } = useDownloads(refetchMangas)
+
+  // 同期完了時は一覧に加えて設定（最后更新時刻）も再取得する
+  const onCollectionDone = useCallback(() => {
+    refetchMangas()
+    refetchSettings()
+  }, [refetchMangas, refetchSettings])
+  const onRecentDone = useCallback(() => {
+    refetchUpdates()
+    refetchSettings()
+  }, [refetchUpdates, refetchSettings])
+
   const { strip, syncCollection, syncRecent, isCollectionSyncing, isRecentSyncing } = useSync({
-    onCollectionDone: refetchMangas,
-    onRecentDone: refetchUpdates,
+    onCollectionDone,
+    onRecentDone,
   })
+
+  // 相互排他フラグ：更新中は他の更新もダウンロードも不可／ダウンロード中は更新不可
+  const isSyncing = isCollectionSyncing || isRecentSyncing
+  const isDownloading = Object.keys(downloads).length > 0
+  const syncDisabled = isSyncing || isDownloading
+  const downloadDisabled = isSyncing
 
   // —— 收藏夹操作 ——
   const handleDownload = useCallback(
@@ -136,7 +154,7 @@ export function App() {
         updatesCount={recentUpdates.length}
         isMobile={isMobile}
         onOpenSettings={() => setSettingsOpen(true)}
-        onOpenMobileMenu={() => setMobileMenuOpen(true)}
+        onToggleMobileMenu={() => setMobileMenuOpen((v) => !v)}
       />
 
       <SyncProgressStrip strip={strip} />
@@ -165,6 +183,9 @@ export function App() {
             downloads={downloads}
             showPreview={showPreview}
             isSyncing={isCollectionSyncing}
+            syncDisabled={syncDisabled}
+            downloadDisabled={downloadDisabled}
+            syncedAt={settings.collection_synced_at}
             onSync={syncCollection}
             onDownload={handleDownload}
             onDelete={handleDelete}
@@ -178,6 +199,9 @@ export function App() {
             downloads={downloads}
             showPreview={showPreview}
             isSyncing={isRecentSyncing}
+            syncDisabled={syncDisabled}
+            downloadDisabled={downloadDisabled}
+            syncedAt={settings.recent_synced_at}
             onSync={syncRecent}
             onDownload={handleRecentDownload}
             onToggleFavorite={handleToggleFavorite}
@@ -193,8 +217,8 @@ export function App() {
       <SettingsDialog
         open={settingsOpen}
         onOpenChange={setSettingsOpen}
-        manualSiteUrl={settings.manual_manga_site_url}
-        onSaved={(url) => setSettings({ manual_manga_site_url: url })}
+        config={settings}
+        onSaved={(cfg) => setSettings(cfg)}
         showPreview={showPreview}
         onShowPreviewChange={handleShowPreviewChange}
         onDownloadStatusUpdated={refetchMangas}

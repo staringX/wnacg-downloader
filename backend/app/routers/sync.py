@@ -9,6 +9,7 @@ from app.utils.logger import logger
 from app.services.task_manager import TaskManager
 from app.services.sync_singleton import sync_singleton
 from app.services.sync_service import SyncService
+from app.services.concurrency import is_any_sync_running, has_active_downloads
 
 router = APIRouter(prefix="/api", tags=["sync"])
 
@@ -108,11 +109,13 @@ def update_download_status(db: Session = Depends(get_db)):
 @router.post("/sync", response_model=TaskCreateResponse)
 def sync_collection(background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     """同步收藏夹（异步任务模式，单例模式）"""
-    # 使用单例管理器检查是否有正在运行的任务
-    if sync_singleton.is_running():
-        running_task_id = sync_singleton.get_running_task_id()
-        raise HTTPException(status_code=409, detail=f"已有同步任务正在运行: {running_task_id}")
-    
+    # 相互排他：他の同期が実行中なら拒否
+    if is_any_sync_running():
+        raise HTTPException(status_code=409, detail="已有更新任务正在运行，请稍后再试")
+    # 相互排他：ダウンロード中は更新不可
+    if has_active_downloads(db):
+        raise HTTPException(status_code=409, detail="下载进行中，无法更新收藏夹")
+
     # 创建任务
     task = TaskManager.create_task(db, task_type="sync")
     

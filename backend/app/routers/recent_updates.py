@@ -10,6 +10,7 @@ from app.services.recent_updates_singleton import recent_updates_singleton
 from app.services.recent_updates_service import RecentUpdatesService
 from app.services.download_queue import download_queue_manager
 from app.services.download_service import DownloadService
+from app.services.concurrency import is_any_sync_running, has_active_downloads
 from app.utils.logger import logger
 
 router = APIRouter(prefix="/api", tags=["recent-updates"])
@@ -32,11 +33,13 @@ def sync_recent_updates(background_tasks: BackgroundTasks, db: Session = Depends
     4. 保存新更新到RecentUpdate表
     5. 删除早于该时间的记录（仅从RecentUpdate表删除）
     """
-    # 使用单例管理器检查是否有正在运行的任务
-    if recent_updates_singleton.is_running():
-        running_task_id = recent_updates_singleton.get_running_task_id()
-        raise HTTPException(status_code=409, detail=f"已有同步最近更新任务正在运行: {running_task_id}")
-    
+    # 相互排他：他の同期が実行中なら拒否
+    if is_any_sync_running():
+        raise HTTPException(status_code=409, detail="已有更新任务正在运行，请稍后再试")
+    # 相互排他：ダウンロード中は更新不可
+    if has_active_downloads(db):
+        raise HTTPException(status_code=409, detail="下载进行中，无法检索新作")
+
     # 创建任务
     task = TaskManager.create_task(db, task_type="sync_recent_updates")
     
@@ -61,6 +64,10 @@ def download_from_update(update_id: str, background_tasks: BackgroundTasks, db: 
     3. 将漫画加入下载队列
     4. 执行下载
     """
+    # 相互排他：更新进行中はダウンロード不可
+    if is_any_sync_running():
+        raise HTTPException(status_code=409, detail="更新进行中，无法下载")
+
     # 查找最近更新记录
     recent_update = db.query(RecentUpdate).filter(RecentUpdate.id == update_id).first()
     if not recent_update:

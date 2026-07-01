@@ -2,7 +2,8 @@ import { useState } from "react"
 import { ExternalLink, Trash2, Check } from "lucide-react"
 import type { MangaItem } from "@/lib/types"
 import type { MangaStatus } from "../logic"
-import { coverGradClass, formatDate } from "@/lib/format"
+import { coverGradClass, formatDate, categoryTags } from "@/lib/format"
+import { CategoryTags } from "@/components/common/category-tags"
 
 interface MangaRowProps {
   manga: MangaItem
@@ -11,6 +12,7 @@ interface MangaRowProps {
   progress: number
   selectionMode: boolean
   selected: boolean
+  downloadDisabled: boolean
   onToggleSelect: () => void
   onOpenOriginal: () => void
   onDownload: () => void
@@ -31,6 +33,7 @@ export function MangaRow({
   progress,
   selectionMode,
   selected,
+  downloadDisabled,
   onToggleSelect,
   onOpenOriginal,
   onDownload,
@@ -39,6 +42,7 @@ export function MangaRow({
   const [hover, setHover] = useState(false)
   const meta = STATUS_LABEL[status]
   const date = formatDate(manga.updated_at)
+  const tags = categoryTags(manga.category)
 
   const stop = (fn: () => void) => (e: React.MouseEvent) => {
     e.stopPropagation()
@@ -121,6 +125,7 @@ export function MangaRow({
           {manga.page_count != null && <span> · {manga.page_count}P</span>}
           {date && <span className="tabular"> · {date}</span>}
         </div>
+        {tags.length > 0 && <CategoryTags tags={tags} style={{ marginTop: 5 }} />}
       </div>
 
       {/* 右侧：下载中进度 / 状态 / 操作 */}
@@ -152,6 +157,8 @@ export function MangaRow({
       ) : (
         <button
           onClick={stop(onDownload)}
+          disabled={downloadDisabled}
+          title={downloadDisabled ? "更新进行中，暂不可下载" : undefined}
           style={{
             flexShrink: 0,
             height: 32,
@@ -162,6 +169,8 @@ export function MangaRow({
             color: "#fff",
             fontSize: 12.5,
             fontWeight: 600,
+            opacity: downloadDisabled ? 0.5 : 1,
+            cursor: downloadDisabled ? "not-allowed" : "pointer",
           }}
         >
           下载

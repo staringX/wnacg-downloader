@@ -9,6 +9,7 @@ from app.schemas import BatchDownloadResponse, TaskCreateResponse
 from app.utils.logger import logger
 from app.services.download_queue import download_queue_manager
 from app.services.download_service import DownloadService
+from app.services.concurrency import is_any_sync_running
 
 router = APIRouter(prefix="/api", tags=["download"])
 
@@ -37,10 +38,14 @@ def download_batch(request: BatchDownloadRequest, background_tasks: BackgroundTa
     - 中途中断不影响已下载的漫画
     - 支持断点续传（每本漫画独立）
     """
+    # 相互排他：更新进行中はダウンロード不可
+    if is_any_sync_running():
+        raise HTTPException(status_code=409, detail="更新进行中，无法下载")
+
     success_count = 0
     failed_count = 0
     failed_titles = []
-    
+
     logger.info(f"\n{'='*60}")
     logger.info(f"开始批量下载: {len(request.manga_ids)} 本漫画")
     logger.info(f"{'='*60}\n")
@@ -120,6 +125,10 @@ def download_manga(manga_id: str, background_tasks: BackgroundTasks, db: Session
     - 边下载边保存，实时更新进度
     - 通过任务ID查询状态
     """
+    # 相互排他：更新进行中はダウンロード不可
+    if is_any_sync_running():
+        raise HTTPException(status_code=409, detail="更新进行中，无法下载")
+
     # 使用下载队列管理器添加任务
     task = download_queue_manager.add_to_queue(db, manga_id)
     

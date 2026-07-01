@@ -1,12 +1,7 @@
-import { createContext, useContext, useCallback, useRef, useState } from "react"
+import { useCallback, useRef, useState } from "react"
 import type { ReactNode } from "react"
 import { useIsMobile } from "@/hooks/use-mobile"
-
-interface ToastContextValue {
-  toast: (message: string) => void
-}
-
-const ToastContext = createContext<ToastContextValue | null>(null)
+import { ToastContext } from "./toast-context"
 
 // DESIGN_SPEC §6.13: 反转配色 / slideUp .25s / 2.2s 自动消失
 export function ToastProvider({ children }: { children: ReactNode }) {
@@ -51,10 +46,4 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       )}
     </ToastContext.Provider>
   )
-}
-
-export function useToast() {
-  const ctx = useContext(ToastContext)
-  if (!ctx) throw new Error("useToast 必须在 ToastProvider 内使用")
-  return ctx
 }

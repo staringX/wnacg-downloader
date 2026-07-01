@@ -13,6 +13,7 @@ export interface MangaItem {
   preview_image_url?: string | null
   is_downloading?: boolean
   is_favorited?: boolean  // 是否已收藏到网站
+  category?: string | null  // 详情页「分類」欄（スラッシュ区切りでタグ表示）
 }
 
 export interface AuthorGroup {

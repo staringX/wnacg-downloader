@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Tuple, List, Dict
 from datetime import datetime
 from app.database import SessionLocal
-from app.models import Manga
+from app.models import Manga, AppConfig
 from app.crawler.base import MangaCrawler
 from app.config import settings
 from app.utils.logger import logger
@@ -316,6 +316,20 @@ class SyncService:
                             if item.get('page_count') and not existing.page_count:
                                 existing.page_count = item['page_count']
                                 db.commit()
+                            # 分類（category）が未取得なら詳情ページから補完（既存収藏のタグ表示用）
+                            if not existing.category:
+                                try:
+                                    details = crawler.get_manga_details(existing.manga_url)
+                                    if details:
+                                        if details.get('category'):
+                                            existing.category = details['category']
+                                        if details.get('updated_at') and not existing.updated_at:
+                                            existing.updated_at = details['updated_at']
+                                        if details.get('cover_image_url') and not existing.cover_image_url:
+                                            existing.cover_image_url = details['cover_image_url']
+                                        db.commit()
+                                except Exception as detail_error:
+                                    logger.warning(f"     ⚠ 补全分类失败: {detail_error}")
                             updated_count += 1
                             logger.info(f"[{processed_count}] ⟳ 已存在: {item['title'][:50]}")
                         else:
@@ -354,6 +368,8 @@ class SyncService:
                                         manga.updated_at = details['updated_at']
                                     if details.get('cover_image_url'):
                                         manga.cover_image_url = details['cover_image_url']
+                                    if details.get('category'):
+                                        manga.category = details['category']
                                     db.commit()
                             except Exception as detail_error:
                                 logger.warning(f"     ⚠ 获取详情失败: {detail_error}")
@@ -372,6 +388,9 @@ class SyncService:
                         db.rollback()
                         continue
                 
+                # 最后更新时刻を記録（画面表示用）
+                _record_synced_at(db, "collection")
+
                 # 任务完成
                 TaskManager.update_task(
                     db, task_id,
@@ -380,7 +399,7 @@ class SyncService:
                     message=f"同步完成：新增 {added_count} 个，更新 {updated_count} 个",
                     result_data=f'{{"added_count": {added_count}, "updated_count": {updated_count}}}'
                 )
-                
+
                 logger.info(f"同步任务完成：新增 {added_count} 个，更新 {updated_count} 个")
                 
             except Exception as e:
@@ -393,4 +412,22 @@ class SyncService:
         finally:
             if db:
                 db.close()
+
+
+def _record_synced_at(db: Session, which: str):
+    """同期完了時刻を AppConfig に記録（which: "collection" | "recent"）。失敗しても本処理は妨げない。"""
+    try:
+        config = db.query(AppConfig).filter(AppConfig.id == "singleton").first()
+        if not config:
+            config = AppConfig(id="singleton")
+            db.add(config)
+        now = datetime.now()
+        if which == "collection":
+            config.collection_synced_at = now
+        else:
+            config.recent_synced_at = now
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        logger.warning(f"记录最后更新时刻失败({which}): {e}")
 
