@@ -1,5 +1,5 @@
 import { Library, Clock, ExternalLink, Sun, Moon, Settings } from "lucide-react"
-import { useTheme } from "@/components/common/theme-provider"
+import { useTheme } from "@/components/common/theme-context"
 import { openKomga } from "@/lib/komga"
 import type { TabKey } from "./header"
 

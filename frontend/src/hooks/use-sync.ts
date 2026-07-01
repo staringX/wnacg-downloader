@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react"
 import { syncApi } from "@/lib/api"
 import { useTaskStatus, useRunningTasks } from "@/hooks/use-task-status"
-import { useToast } from "@/components/common/toast"
+import { useToast } from "@/components/common/toast-context"
 
 interface UseSyncArgs {
   onCollectionDone: () => void

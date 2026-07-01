@@ -24,3 +24,22 @@ export function formatDate(value: string | null | undefined): string {
   const day = String(d.getDate()).padStart(2, "0")
   return `${y}-${m}-${day}`
 }
+
+// 「最后更新」表示用：YYYY-MM-DD HH:mm（値が無ければ空文字）
+export function formatDateTime(value: string | null | undefined): string {
+  const date = formatDate(value)
+  if (!date) return ""
+  const d = new Date(value as string)
+  const hh = String(d.getHours()).padStart(2, "0")
+  const mm = String(d.getMinutes()).padStart(2, "0")
+  return `${date} ${hh}:${mm}`
+}
+
+// 详情页「分類」欄をスラッシュ（全角／半角）で分割してタグ配列にする
+export function categoryTags(value: string | null | undefined): string[] {
+  if (!value) return []
+  return value
+    .split(/[／/]/)
+    .map((s) => s.trim())
+    .filter(Boolean)
+}

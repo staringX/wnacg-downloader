@@ -2,7 +2,8 @@ import { useState } from "react"
 import { Loader2, FileText, ExternalLink, Trash2, Check, Download } from "lucide-react"
 import type { MangaItem } from "@/lib/types"
 import type { MangaStatus } from "../logic"
-import { coverGradClass, formatDate } from "@/lib/format"
+import { coverGradClass, formatDate, categoryTags } from "@/lib/format"
+import { CategoryTags } from "@/components/common/category-tags"
 
 interface MangaCardProps {
   manga: MangaItem
@@ -12,6 +13,7 @@ interface MangaCardProps {
   showPreview: boolean
   selectionMode: boolean
   selected: boolean
+  downloadDisabled: boolean
   onToggleSelect: () => void
   onOpenOriginal: () => void
   onDownload: () => void
@@ -34,6 +36,7 @@ export function MangaCard({
   showPreview,
   selectionMode,
   selected,
+  downloadDisabled,
   onToggleSelect,
   onOpenOriginal,
   onDownload,
@@ -42,6 +45,7 @@ export function MangaCard({
   const [hover, setHover] = useState(false)
   const badge = STATUS_BADGE[status]
   const date = formatDate(manga.updated_at)
+  const tags = categoryTags(manga.category)
   const showCover = showPreview
   const hasImage = showCover && Boolean(manga.preview_image_url)
 
@@ -284,9 +288,17 @@ export function MangaCard({
           </div>
         )}
 
+        {/* 分類タグ（スラッシュ区切り） */}
+        {tags.length > 0 && <CategoryTags tags={tags} style={{ marginTop: 7 }} />}
+
         {/* 操作行 */}
         <div style={{ display: "flex", alignItems: "center", gap: 7, marginTop: showCover ? 9 : 10 }}>
-          <MainButton status={status} progress={progress} onDownload={stop(onDownload)} />
+          <MainButton
+            status={status}
+            progress={progress}
+            downloadDisabled={downloadDisabled}
+            onDownload={stop(onDownload)}
+          />
           <button
             onClick={stop(onOpenOriginal)}
             title="在原站点打开"
@@ -339,10 +351,12 @@ const ghostIconBtn: React.CSSProperties = {
 function MainButton({
   status,
   progress,
+  downloadDisabled,
   onDownload,
 }: {
   status: MangaStatus
   progress: number
+  downloadDisabled: boolean
   onDownload: (e: React.MouseEvent) => void
 }) {
   const base: React.CSSProperties = {
@@ -385,7 +399,18 @@ function MainButton({
     )
   }
   return (
-    <button onClick={onDownload} style={{ ...base, background: "var(--gradient)", color: "#fff" }}>
+    <button
+      onClick={onDownload}
+      disabled={downloadDisabled}
+      title={downloadDisabled ? "更新进行中，暂不可下载" : undefined}
+      style={{
+        ...base,
+        background: "var(--gradient)",
+        color: "#fff",
+        opacity: downloadDisabled ? 0.5 : 1,
+        cursor: downloadDisabled ? "not-allowed" : "pointer",
+      }}
+    >
       <Download size={15} />
       下载
     </button>

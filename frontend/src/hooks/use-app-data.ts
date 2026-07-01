@@ -7,7 +7,12 @@ import type { MangaItem, RecentUpdate } from "@/lib/types"
 export function useAppData() {
   const [mangas, setMangas] = useState<MangaItem[]>([])
   const [recentUpdates, setRecentUpdates] = useState<RecentUpdate[]>([])
-  const [settings, setSettings] = useState<AppConfig>({ manual_manga_site_url: null })
+  const [settings, setSettings] = useState<AppConfig>({
+    manual_manga_site_url: null,
+    recent_updates_hanhua_only: true,
+    collection_synced_at: null,
+    recent_synced_at: null,
+  })
   const [loading, setLoading] = useState(true)
 
   const refetchMangas = useCallback(async () => {

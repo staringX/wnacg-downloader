@@ -9,6 +9,7 @@ interface Props {
   showPreview: boolean
   downloading: boolean
   progress: number
+  downloadDisabled: boolean
   onOpenOriginal: () => void
   onToggleFavorite: () => void
   onDownload: () => void
@@ -21,6 +22,7 @@ export function RecentUpdateCard({
   showPreview,
   downloading,
   progress,
+  downloadDisabled,
   onOpenOriginal,
   onToggleFavorite,
   onDownload,
@@ -156,7 +158,8 @@ export function RecentUpdateCard({
 
           <button
             onClick={stop(onDownload)}
-            disabled={downloading || downloaded}
+            disabled={downloading || downloaded || downloadDisabled}
+            title={downloadDisabled && !downloading && !downloaded ? "更新进行中，暂不可下载" : undefined}
             style={{
               flex: 1,
               height: 34,
@@ -170,6 +173,8 @@ export function RecentUpdateCard({
               gap: 6,
               background: downloading || downloaded ? "var(--surface2)" : "var(--gradient)",
               color: downloading || downloaded ? "var(--text2)" : "#fff",
+              opacity: downloadDisabled && !downloading && !downloaded ? 0.5 : 1,
+              cursor: downloadDisabled && !downloading && !downloaded ? "not-allowed" : "pointer",
             }}
           >
             {downloading ? (

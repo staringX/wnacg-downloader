@@ -9,20 +9,25 @@ import { SelectionBar } from "./components/selection-bar"
 import { MangaCard } from "./components/manga-card"
 import { MangaRow } from "./components/manga-row"
 import { AuthorSectionHeader } from "@/components/common/author-section-header"
+import { LastUpdated, SyncingNotice } from "@/components/common/status-line"
 import { coverIndexFromKey } from "@/lib/format"
 import {
   filterMangas,
-  sortMangas,
+  filterByAuthors,
+  sortByRelease,
+  uniqueAuthors,
   groupByAuthor,
   statusOf,
 } from "./logic"
-import type { SortMode } from "./logic"
 
 interface CollectionViewProps {
   mangas: MangaItem[]
   downloads: Record<string, DownloadState>
   showPreview: boolean
   isSyncing: boolean
+  syncDisabled: boolean
+  downloadDisabled: boolean
+  syncedAt: string | null
   onSync: () => void
   onDownload: (id: string) => void
   onDelete: (id: string) => void
@@ -37,6 +42,9 @@ export function CollectionView(props: CollectionViewProps) {
     downloads,
     showPreview,
     isSyncing,
+    syncDisabled,
+    downloadDisabled,
+    syncedAt,
     onSync,
     onDownload,
     onDelete,
@@ -47,7 +55,7 @@ export function CollectionView(props: CollectionViewProps) {
 
   const [search, setSearch] = useState("")
   const [view, setView] = useState<ViewMode>("card")
-  const [sort, setSort] = useState<SortMode>("default")
+  const [selectedAuthors, setSelectedAuthors] = useState<Set<string>>(new Set())
   const [group, setGroup] = useState(false)
   const [selectionMode, setSelectionMode] = useState(false)
   const [selected, setSelected] = useState<Set<string>>(new Set())
@@ -59,10 +67,13 @@ export function CollectionView(props: CollectionViewProps) {
     [mangas, downloads]
   )
 
+  const authors = useMemo(() => uniqueAuthors(mangas), [mangas])
+
+  // 常にリリース時間の新しい順。検索＋作者マルチ選択で絞り込む。
   const visible = useMemo(() => {
-    const filtered = filterMangas(mangas, search)
-    return sortMangas(filtered, sort, downloads)
-  }, [mangas, search, sort, downloads])
+    const filtered = filterByAuthors(filterMangas(mangas, search), selectedAuthors)
+    return sortByRelease(filtered)
+  }, [mangas, search, selectedAuthors])
 
   const toggleSelect = (id: string) => {
     setSelected((prev) => {
@@ -99,9 +110,9 @@ export function CollectionView(props: CollectionViewProps) {
       onDelete: () => onDelete(m.id),
     }
     return view === "card" ? (
-      <MangaCard key={m.id} showPreview={showPreview} {...common} />
+      <MangaCard key={m.id} showPreview={showPreview} downloadDisabled={downloadDisabled} {...common} />
     ) : (
-      <MangaRow key={m.id} {...common} />
+      <MangaRow key={m.id} downloadDisabled={downloadDisabled} {...common} />
     )
   }
 
@@ -123,17 +134,23 @@ export function CollectionView(props: CollectionViewProps) {
         onSearch={setSearch}
         view={view}
         onViewChange={setView}
-        sort={sort}
-        onSortChange={setSort}
+        authors={authors}
+        selectedAuthors={selectedAuthors}
+        onAuthorsChange={setSelectedAuthors}
         groupByAuthor={group}
         onToggleGroup={() => setGroup((g) => !g)}
         selectionMode={selectionMode}
         onToggleSelection={() => (selectionMode ? exitSelection() : setSelectionMode(true))}
         onSync={onSync}
         isSyncing={isSyncing}
+        syncDisabled={syncDisabled}
+        downloadDisabled={downloadDisabled}
         onDownloadAll={() => onDownloadAll(pendingIds)}
         pendingCount={pendingIds.length}
       />
+
+      <LastUpdated syncedAt={syncedAt} />
+      {isSyncing && <SyncingNotice text="正在更新收藏夹，其它操作已暂停…" />}
 
       {selectionMode && (
         <SelectionBar count={selected.size} onDelete={handleBatchDelete} onCancel={exitSelection} />

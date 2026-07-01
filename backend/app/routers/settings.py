@@ -20,7 +20,7 @@ def get_settings(db: Session = Depends(get_db)):
         db.add(config)
         db.commit()
         db.refresh(config)
-    
+
     return AppConfigResponse.from_orm(config)
 
 
@@ -43,9 +43,13 @@ def update_settings(update: AppConfigUpdate, db: Session = Depends(get_db)):
         
         config.manual_manga_site_url = url if url else None
         logger.info(f"更新手动设置的漫画网站链接: {config.manual_manga_site_url}")
-    
+
+    if update.recent_updates_hanhua_only is not None:
+        config.recent_updates_hanhua_only = update.recent_updates_hanhua_only
+        logger.info(f"更新最近更新「汉化」过滤: {config.recent_updates_hanhua_only}")
+
     db.commit()
     db.refresh(config)
-    
+
     return AppConfigResponse.from_orm(config)
 

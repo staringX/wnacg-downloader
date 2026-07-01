@@ -26,19 +26,10 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# 系统依赖与 Chromium（支持 ARM）
+# 系统依赖（Chromium 已移除：爬虫改用 requests + BeautifulSoup）
 RUN apt-get update && apt-get install -y \
-    wget \
-    gnupg \
-    unzip \
-    curl \
     ca-certificates \
-    chromium \
-    chromium-driver \
     && rm -rf /var/lib/apt/lists/*
-
-RUN ln -s /usr/bin/chromium /usr/bin/chromium-browser || true \
-    && ln -s /usr/bin/chromedriver /usr/local/bin/chromedriver || true
 
 # Python 依赖
 COPY backend/requirements.txt .

@@ -2,14 +2,15 @@ import { useEffect, useState } from "react"
 import * as Dialog from "@radix-ui/react-dialog"
 import { Settings as SettingsIcon, X, Loader2, FileCheck } from "lucide-react"
 import { settingsApi, syncApi } from "@/lib/api"
+import type { AppConfig } from "@/lib/api"
 import { Switch } from "@/components/common/switch"
-import { useToast } from "@/components/common/toast"
+import { useToast } from "@/components/common/toast-context"
 
 interface SettingsDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  manualSiteUrl: string | null
-  onSaved: (url: string | null) => void
+  config: AppConfig
+  onSaved: (cfg: AppConfig) => void
   showPreview: boolean
   onShowPreviewChange: (v: boolean) => void
   onDownloadStatusUpdated: () => void
@@ -19,27 +20,34 @@ interface SettingsDialogProps {
 export function SettingsDialog({
   open,
   onOpenChange,
-  manualSiteUrl,
+  config,
   onSaved,
   showPreview,
   onShowPreviewChange,
   onDownloadStatusUpdated,
 }: SettingsDialogProps) {
   const { toast } = useToast()
-  const [url, setUrl] = useState(manualSiteUrl ?? "")
+  const [url, setUrl] = useState(config.manual_manga_site_url ?? "")
+  const [hanhuaOnly, setHanhuaOnly] = useState(config.recent_updates_hanhua_only)
   const [saving, setSaving] = useState(false)
   const [updating, setUpdating] = useState(false)
 
   useEffect(() => {
-    if (open) setUrl(manualSiteUrl ?? "")
-  }, [open, manualSiteUrl])
+    if (open) {
+      setUrl(config.manual_manga_site_url ?? "")
+      setHanhuaOnly(config.recent_updates_hanhua_only)
+    }
+  }, [open, config])
 
   const handleSave = async () => {
     setSaving(true)
     try {
       const trimmed = url.trim()
-      const cfg = await settingsApi.updateSettings({ manual_manga_site_url: trimmed || null })
-      onSaved(cfg.manual_manga_site_url)
+      const cfg = await settingsApi.updateSettings({
+        manual_manga_site_url: trimmed || null,
+        recent_updates_hanhua_only: hanhuaOnly,
+      })
+      onSaved(cfg)
       toast("设置已保存")
       onOpenChange(false)
     } catch (e) {
@@ -174,6 +182,26 @@ export function SettingsDialog({
                   </div>
                 </div>
                 <Switch checked={showPreview} onChange={onShowPreviewChange} />
+              </div>
+
+              {/* 仅获取「汉化」作品 */}
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 12,
+                  padding: "12px 14px",
+                  borderRadius: 11,
+                  background: "var(--surface2)",
+                }}
+              >
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 13.5, fontWeight: 500 }}>最近更新仅获取「汉化」作品</div>
+                  <div style={{ fontSize: 11, color: "var(--text2)", marginTop: 2 }}>
+                    检索新作时，仅保留详情「分类」含「漢化」的作品。关闭则获取全部。
+                  </div>
+                </div>
+                <Switch checked={hanhuaOnly} onChange={setHanhuaOnly} />
               </div>
 
               {/* §4.1 数据维护 */}

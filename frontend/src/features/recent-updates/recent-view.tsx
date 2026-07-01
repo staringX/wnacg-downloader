@@ -4,13 +4,18 @@ import type { RecentUpdate } from "@/lib/types"
 import type { DownloadState } from "@/hooks/use-downloads"
 import { RecentUpdateCard } from "./components/recent-update-card"
 import { AuthorSectionHeader } from "@/components/common/author-section-header"
-import { groupByAuthor } from "@/features/collection/logic"
+import { AuthorFilter } from "@/components/common/author-filter"
+import { LastUpdated, SyncingNotice } from "@/components/common/status-line"
+import { groupByAuthor, filterByAuthors, uniqueAuthors } from "@/features/collection/logic"
 
 interface RecentViewProps {
   updates: RecentUpdate[]
   downloads: Record<string, DownloadState>
   showPreview: boolean
   isSyncing: boolean
+  syncDisabled: boolean
+  downloadDisabled: boolean
+  syncedAt: string | null
   onSync: () => void
   onDownload: (id: string) => void
   onToggleFavorite: (u: RecentUpdate) => void
@@ -18,10 +23,25 @@ interface RecentViewProps {
 }
 
 export function RecentView(props: RecentViewProps) {
-  const { updates, downloads, showPreview, isSyncing, onSync, onDownload, onToggleFavorite, onOpenOriginal } =
-    props
+  const {
+    updates,
+    downloads,
+    showPreview,
+    isSyncing,
+    syncDisabled,
+    downloadDisabled,
+    syncedAt,
+    onSync,
+    onDownload,
+    onToggleFavorite,
+    onOpenOriginal,
+  } = props
   const [group, setGroup] = useState(false)
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
+  const [selectedAuthors, setSelectedAuthors] = useState<Set<string>>(new Set())
+
+  const authors = useMemo(() => uniqueAuthors(updates), [updates])
+  const visible = useMemo(() => filterByAuthors(updates, selectedAuthors), [updates, selectedAuthors])
 
   const grid: React.CSSProperties = {
     display: "grid",
@@ -39,6 +59,7 @@ export function RecentView(props: RecentViewProps) {
         showPreview={showPreview}
         downloading={Boolean(dl)}
         progress={dl?.progress ?? 0}
+        downloadDisabled={downloadDisabled}
         onOpenOriginal={() => onOpenOriginal(u)}
         onToggleFavorite={() => onToggleFavorite(u)}
         onDownload={() => onDownload(u.id)}
@@ -46,7 +67,7 @@ export function RecentView(props: RecentViewProps) {
     )
   }
 
-  const groups = useMemo(() => groupByAuthor(updates), [updates])
+  const groups = useMemo(() => groupByAuthor(visible), [visible])
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
@@ -70,6 +91,7 @@ export function RecentView(props: RecentViewProps) {
             检索收藏作者的最新更新，一键收藏或下载。
           </div>
         </div>
+        <AuthorFilter authors={authors} selected={selectedAuthors} onChange={setSelectedAuthors} />
         <button
           onClick={() => setGroup((g) => !g)}
           style={{
@@ -91,6 +113,8 @@ export function RecentView(props: RecentViewProps) {
         </button>
         <button
           onClick={onSync}
+          disabled={syncDisabled}
+          title={syncDisabled ? "下载或更新进行中，暂不可检索" : undefined}
           style={{
             display: "inline-flex",
             alignItems: "center",
@@ -103,6 +127,8 @@ export function RecentView(props: RecentViewProps) {
             color: "#fff",
             fontSize: 13,
             fontWeight: 600,
+            opacity: syncDisabled ? 0.5 : 1,
+            cursor: syncDisabled ? "not-allowed" : "pointer",
             boxShadow: "0 6px 16px color-mix(in srgb, var(--accent) 40%, transparent)",
           }}
         >
@@ -111,7 +137,10 @@ export function RecentView(props: RecentViewProps) {
         </button>
       </div>
 
-      {updates.length === 0 ? (
+      <LastUpdated syncedAt={syncedAt} />
+      {isSyncing && <SyncingNotice text="正在检索新作，其它操作已暂停…" />}
+
+      {visible.length === 0 ? (
         <div
           style={{
             display: "flex",
@@ -123,7 +152,9 @@ export function RecentView(props: RecentViewProps) {
           }}
         >
           <Clock size={40} />
-          <span style={{ fontSize: 14 }}>暂无最近更新，点击「检索新作」获取</span>
+          <span style={{ fontSize: 14 }}>
+            {updates.length === 0 ? "暂无最近更新，点击「检索新作」获取" : "没有匹配的作者"}
+          </span>
         </div>
       ) : group ? (
         <div style={{ display: "flex", flexDirection: "column", gap: 22 }}>
@@ -142,7 +173,7 @@ export function RecentView(props: RecentViewProps) {
                 {!isCollapsed && (
                   <div style={grid}>
                     {g.mangas.map((m) =>
-                      renderCard(m as RecentUpdate, updates.indexOf(m as RecentUpdate))
+                      renderCard(m as RecentUpdate, visible.indexOf(m as RecentUpdate))
                     )}
                   </div>
                 )}
@@ -151,7 +182,7 @@ export function RecentView(props: RecentViewProps) {
           })}
         </div>
       ) : (
-        <div style={grid}>{updates.map((u, i) => renderCard(u, i))}</div>
+        <div style={grid}>{visible.map((u, i) => renderCard(u, i))}</div>
       )}
     </div>
   )
