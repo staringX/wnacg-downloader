@@ -24,8 +24,8 @@ Python FastAPI后端服务，提供漫画爬取、下载、管理等功能。
 
 - Python 3.11+
 - PostgreSQL 15+
-- Chromium浏览器（用于Selenium）
-- Chromium Driver
+
+> 爬虫已改用 requests + BeautifulSoup，无需 Chromium / 浏览器驱动。
 
 ## 安装
 
@@ -71,12 +71,14 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4
 ```
 backend/
 ├── app/
-│   ├── crawler/          # 爬虫模块
-│   │   ├── base.py           # 爬虫基类
-│   │   ├── browser.py        # 浏览器管理和登录
+│   ├── crawler/          # 爬虫模块（requests + BeautifulSoup）
+│   │   ├── base.py           # 爬虫门面（整合各功能）
+│   │   ├── http_client.py    # HTTP 客户端（域名解析/登录/取得/重试）
+│   │   ├── parsers.py        # HTML 解析纯函数（解析契约）
 │   │   ├── collection.py     # 收藏夹爬取
-│   │   ├── manga_details.py  # 漫画详情和图片获取
-│   │   └── search.py         # 作者搜索
+│   │   ├── manga_details.py  # 漫画详情和原图获取（并发）
+│   │   ├── search.py         # 作者搜索
+│   │   └── rate_limiter.py   # 下载时的限速
 │   ├── routers/          # API路由
 │   │   ├── manga.py          # 漫画CRUD
 │   │   ├── sync.py           # 同步收藏夹
@@ -135,11 +137,13 @@ backend/
 
 ### 爬虫模块 (crawler/)
 
-- **base.py**: 爬虫基类，整合各个爬虫模块
-- **browser.py**: 浏览器管理、登录、获取网站地址
+- **base.py**: 爬虫门面，整合各个爬虫模块
+- **http_client.py**: HTTP 客户端，负责域名解析、登录、页面取得、编码修正、重试/超时
+- **parsers.py**: HTML 解析纯函数（解析契约，配套黄金主测试）
 - **collection.py**: 收藏夹爬取，支持分页
-- **manga_details.py**: 漫画详情和图片获取，支持分页
+- **manga_details.py**: 漫画详情和原图获取（线程池并发），支持分页
 - **search.py**: 作者搜索，获取最近更新
+- **rate_limiter.py**: 下载时对站点/CDN 的最小请求间隔限速
 
 ### 服务模块 (services/)
 
@@ -188,7 +192,7 @@ backend/
 
 ## 注意事项
 
-1. **首次运行**：需要确保Chromium和ChromiumDriver已正确安装（Docker中已包含）
+1. **爬虫**：使用 requests + BeautifulSoup 直接 HTTP 访问，无需浏览器；下载时按 `REQUEST_MIN_INTERVAL` / `IMAGE_REQUEST_MIN_INTERVAL` 限速以减轻站点压力
 2. **下载目录**：下载的漫画文件保存在 `downloads` 目录（按作者分类），CBZ 文件自动包含 ComicInfo.xml 元数据
 3. **封面图片**：封面图片保存在 `covers` 目录
 4. **ComicInfo.xml**：自动从网页提取漫画信息（分类、标签、上传者、简介等）并生成标准格式的元数据文件
@@ -226,10 +230,9 @@ curl http://localhost:18000/api/tasks/running/list?task_type=download
 - `fastapi`: Web框架
 - `sqlalchemy`: ORM
 - `psycopg2-binary`: PostgreSQL驱动
-- `selenium`: 浏览器自动化
+- `requests`: HTTP请求（爬虫）
+- `beautifulsoup4`: HTML解析（爬虫）
 - `loguru`: 日志记录
 - `pydantic`: 数据验证
-- `requests`: HTTP请求
-- `beautifulsoup4`: HTML解析
 
 完整依赖列表见 `requirements.txt`

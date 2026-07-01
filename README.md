@@ -174,12 +174,14 @@ manga/
 │   └── (生产构建产物由后端镜像同源配信 = 方案B)
 ├── backend/              # Python FastAPI后端
 │   ├── app/
-│   │   ├── crawler/      # 爬虫模块
-│   │   │   ├── base.py           # 爬虫基类
-│   │   │   ├── browser.py        # 浏览器管理和登录
+│   │   ├── crawler/      # 爬虫模块（requests + BeautifulSoup，无浏览器依赖）
+│   │   │   ├── base.py           # 爬虫门面（整合各功能）
+│   │   │   ├── http_client.py    # HTTP 客户端（域名解析/登录/取得/重试）
+│   │   │   ├── parsers.py        # HTML 解析纯函数（解析契约）
 │   │   │   ├── collection.py     # 收藏夹爬取
-│   │   │   ├── manga_details.py  # 漫画详情和图片获取
-│   │   │   └── search.py         # 作者搜索
+│   │   │   ├── manga_details.py  # 漫画详情和原图获取（并发）
+│   │   │   ├── search.py         # 作者搜索
+│   │   │   └── rate_limiter.py   # 下载时的限速（站点负载配虑）
 │   │   ├── routers/      # API路由
 │   │   │   ├── manga.py          # 漫画CRUD
 │   │   │   ├── sync.py           # 同步收藏夹
@@ -289,6 +291,8 @@ npm run dev   # http://localhost:5173，/api 与 /api/events(SSE) 代理到后�
 | `COVER_DIR` | 封面目录（容器内路径） | 否 | `backend` 服务的 `environment` 部分 | `/app/covers` |
 | `CORS_ORIGINS` | CORS允许的来源（JSON数组；方案B 下前端与API同源，一般无需配置） | 否 | `backend` 服务的 `environment` 部分 | `["http://localhost:18000"]` |
 | `EXCLUDED_CATEGORIES` | 最近更新搜索时排除的分类（JSON数组或逗号分隔） | 否 | `backend` 服务的 `environment` 部分 | `["优秀","全部","一般","真人","同人"]` |
+| `REQUEST_MIN_INTERVAL` | 下载时对站点本体（view 页）的最小请求间隔（秒，0 为不限制） | 否 | `backend` 服务的 `environment` 部分 | `0.3` |
+| `IMAGE_REQUEST_MIN_INTERVAL` | 下载时对图片 CDN 的最小请求间隔（秒，0 为不限制） | 否 | `backend` 服务的 `environment` 部分 | `0.3` |
 
 ### 路径配置（群晖NAS用户）
 
@@ -370,25 +374,25 @@ npm run dev   # http://localhost:5173，/api 与 /api/events(SSE) 代理到后�
 ## 🛠️ 技术栈
 
 ### 前端
-- **框架**: Next.js 16 (App Router)
-- **UI库**: React 19, TypeScript
-- **样式**: Tailwind CSS
-- **组件**: Radix UI
-- **状态管理**: React Hooks (useState, useEffect, useMemo)
+- **框架/构建**: React 19 + Vite 8（SPA）
+- **语言**: TypeScript
+- **样式**: Tailwind CSS 4
+- **组件**: Radix UI，图标 lucide-react
+- **状态管理**: React Hooks（自定义 hooks：任务状态 / SSE / 下载等）
 - **实时通信**: Server-Sent Events (SSE)
+- **配信**: 生产构建产物打包进后端镜像，与 API 同源配信（方案B）
 
 ### 后端
 - **框架**: FastAPI (Python 3.11)
 - **ORM**: SQLAlchemy 2.0
 - **数据库**: PostgreSQL 15
-- **爬虫**: Selenium WebDriver
+- **爬虫**: requests + BeautifulSoup（HTTP 直取，无浏览器依赖）
 - **日志**: loguru
 - **任务管理**: 自定义任务管理系统 + SSE
 
 ### 基础设施
-- **容器化**: Docker, Docker Compose
+- **容器化**: Docker, Docker Compose（已移除 Chromium，镜像更轻量）
 - **数据库**: PostgreSQL 15 (Alpine)
-- **浏览器**: Chromium (Docker内)
 - **漫画阅读器**: Komga（可选，已集成）
 
 ## 📁 数据存储
@@ -484,6 +488,16 @@ curl http://localhost:18000/api/tasks/running/list?task_type=download
 ```
 
 ## 📝 更新日志
+
+### v3.0.0
+- ✅ **前端从 Next.js 重构为 React + Vite（SPA）**，生产构建与后端 API 同源配信（方案B）
+- ✅ **爬虫从 Selenium 全面迁移到 requests + BeautifulSoup**，移除浏览器（Chromium）依赖
+  - 登录 / 收藏夹 / 详情 / 搜索 / 原图获取 / 收藏均通过 HTTP 完成
+  - 原图获取改为线程池并发 HTTP，废除一次性浏览器进程
+  - 解析逻辑集中到纯函数 `parsers.py`，配套黄金主测试（golden master）固定行为
+- ✅ **Docker 镜像轻量化**：移除 Chromium / chromium-driver 及相关系统依赖
+- ✅ **下载时的站点限速**：新增可配置的最小请求间隔（`REQUEST_MIN_INTERVAL` / `IMAGE_REQUEST_MIN_INTERVAL`），仅在下载时生效，避免对站点造成过大压力
+- ✅ 翻页上限的固定值（旧 100 页）废除：依靠"已访问集合 + 无下一页即终止"自然停止，支持超大体量作品
 
 ### v2.1.0
 - ✅ 添加 ComicInfo.xml 自动生成功能
