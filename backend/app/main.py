@@ -61,7 +61,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="漫画下载管理器API",
-    version="1.0.0",
+    version="3.0.0",
     lifespan=lifespan
 )
 

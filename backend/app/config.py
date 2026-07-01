@@ -26,6 +26,14 @@ class Settings(BaseSettings):
     
     # 获取原图链接的并发线程数（用于并发获取原图URL）
     image_fetch_threads: int = 3
+
+    # レート制限（サイト負荷への配慮）。**漫画ダウンロード時のみ**適用。リクエスト間の最小間隔[秒]。0 で無制限。
+    # 収藏夹同期・検索などのスキャン動作は軽量なため制限しない（HttpClient は throttle 無し）。
+    #   request_min_interval      : DL 時の view ページ取得（サイト本体）への最小間隔
+    #   image_request_min_interval: DL 時の画像バイナリ取得（CDN）への最小間隔
+    # 並行数に関わらず実効レートは 1/間隔[req/s] に頭打ちになる（既定 0.3s ≈ 3.3 req/s）。
+    request_min_interval: float = 0.3
+    image_request_min_interval: float = 0.3
     
     # API配置
     api_host: str = "0.0.0.0"
