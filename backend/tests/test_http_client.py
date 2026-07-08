@@ -9,7 +9,10 @@
 import requests
 import pytest
 
-from app.crawler.http_client import HttpClient
+from app.crawler.http_client import (
+    HttpClient, impersonated_get, build_impersonate_session,
+    RETRYABLE_EXCEPTIONS, CURL_CFFI_AVAILABLE,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -239,6 +242,86 @@ def test_get_returns_last_429_when_not_resolved(monkeypatch):
     resp = client.get(f"{BASE}/x")
     assert resp.status_code == 429
     assert len(session.get_calls) == 3
+
+
+# ---------------------------------------------------------------------------
+# curl_cffi（Chrome 偽装）連携
+# ---------------------------------------------------------------------------
+@pytest.mark.skipif(not CURL_CFFI_AVAILABLE, reason="curl_cffi 未導入")
+def test_curl_cffi_error_is_retryable():
+    """curl_cffi の RequestsError が RETRYABLE_EXCEPTIONS に含まれること"""
+    from curl_cffi.requests import RequestsError
+    assert RequestsError in RETRYABLE_EXCEPTIONS
+
+
+@pytest.mark.skipif(not CURL_CFFI_AVAILABLE, reason="curl_cffi 未導入")
+def test_get_retries_on_curl_cffi_error(monkeypatch):
+    """curl_cffi の一過性エラーもリトライ対象（requests 系と横断的に扱う）"""
+    monkeypatch.setattr("app.crawler.http_client.time.sleep", lambda *_: None)
+    from curl_cffi.requests import RequestsError
+    ok = FakeResponse(text="ok")
+    session = FakeSession(get_responses=[RequestsError("curl boom"), ok])
+    client = HttpClient(base_url=BASE, session=session, max_retries=3)
+    resp = client.get(f"{BASE}/x")
+    assert resp is ok
+    assert len(session.get_calls) == 2
+
+
+def test_build_impersonate_session_falls_back_when_disabled():
+    """impersonate 空文字なら通常の requests.Session を返す"""
+    sess = build_impersonate_session(impersonate="")
+    assert isinstance(sess, requests.Session)
+    sess.close()
+
+
+def test_adaptive_backpressure_ramps_on_429_and_recovers(monkeypatch):
+    """429 で追加遅延が増え、成功が続くと減衰する（全 GET に自動適用）"""
+    slept = []
+    monkeypatch.setattr("app.crawler.http_client.time.sleep", lambda s: slept.append(s))
+    ok = FakeResponse(text="ok")
+    # 2 回連続で成功する応答（GET を 2 回呼ぶ）
+    session = FakeSession(get_responses=[FakeResponse(status_code=429), ok, ok])
+    client = HttpClient(base_url=BASE, session=session, max_retries_429=5, min_wait_429=2.0)
+    # バックプレッシャーを明示的に有効化（conftest で既定無効のため）
+    client._adaptive_step = 1.0
+    client._adaptive_max = 8.0
+    client._adaptive_recover = 0.25
+
+    # 1 回目: 429 → penalize(delay=1.0) → retry(sleep 2.0) → 成功 recover(0.75)
+    client.get(f"{BASE}/x")
+    assert client._adaptive_delay == pytest.approx(0.75)
+    # 2 回目の GET 冒頭で _apply_backpressure が現在の遅延だけ待つ
+    client.get(f"{BASE}/y")
+    # 冒頭で 0.75 待機、成功で 0.5 に減衰
+    assert 0.75 in slept
+    assert client._adaptive_delay == pytest.approx(0.5)
+
+
+def test_adaptive_backpressure_disabled_when_step_zero(monkeypatch):
+    """step=0 なら追加遅延は発生しない（既定・テスト時の挙動）"""
+    monkeypatch.setattr("app.crawler.http_client.time.sleep", lambda *_: None)
+    session = FakeSession(get_responses=[FakeResponse(status_code=429),
+                                         FakeResponse(text="ok")])
+    client = HttpClient(base_url=BASE, session=session)
+    client._adaptive_step = 0.0
+    client.get(f"{BASE}/x")
+    assert client._adaptive_delay == 0.0
+
+
+def test_impersonated_get_retries_429(monkeypatch):
+    """impersonated_get（画像バイト用一発 GET）が 429 をリトライして成功する"""
+    slept = []
+    monkeypatch.setattr("app.crawler.http_client.time.sleep", lambda s: slept.append(s))
+    r429 = FakeResponse(status_code=429)
+    ok = FakeResponse(text="img", status_code=200)
+    seq = [r429, ok]
+    monkeypatch.setattr("app.crawler.http_client.requests.get",
+                        lambda *a, **k: seq.pop(0))
+    # impersonate 無効化して requests.get 経路を通す
+    resp = impersonated_get(f"{BASE}/img.jpg", impersonate="",
+                            max_retries_429=5, min_wait_429=2.0)
+    assert resp is ok
+    assert slept == [2.0]
 
 
 # ---------------------------------------------------------------------------

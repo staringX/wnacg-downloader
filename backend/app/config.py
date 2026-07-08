@@ -46,6 +46,20 @@ class Settings(BaseSettings):
 
     # 429（Too Many Requests）を受けた際のリトライ時、Retry-After が無い/過大な場合の待機上限[秒]。
     retry_after_cap: float = 30.0
+
+    # HTTP クライアントのブラウザ偽装（Cloudflare の TLS/JA3 指紋判定を回避）。
+    # curl_cffi の impersonate 指定（例: "chrome" / "chrome124" / "safari" 等）。
+    # 空文字にすると偽装せず通常の requests で動作する（curl_cffi 未導入時も requests へ回退）。
+    http_impersonate: str = "chrome"
+
+    # 適応的バックプレッシャー（Cloudflare 429 のカスケード防止）。
+    # 429 を観測するとクライアントが全リクエストを自動的に減速し（毎回 adaptive_step 秒ずつ増やし
+    # 上限 adaptive_max 秒）、CF のレート制限窓が回復してから徐々に通常速度へ戻す（成功ごとに
+    # adaptive_recover 秒ずつ減衰）。単純なリトライでは抜けられない長い制限窓に対して有効。
+    # 0 系（step=0）にすると無効化。
+    adaptive_backpressure_step: float = 0.75    # 429 ごとの増分[秒]
+    adaptive_backpressure_max: float = 8.0      # 追加遅延の上限[秒]
+    adaptive_backpressure_recover: float = 0.15  # 成功ごとの減衰[秒]
     
     # API配置
     api_host: str = "0.0.0.0"

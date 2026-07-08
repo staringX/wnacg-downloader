@@ -12,3 +12,6 @@ os.environ.setdefault("MANGA_PASSWORD", "test_pass")
 os.environ.setdefault("REQUEST_MIN_INTERVAL", "0")
 os.environ.setdefault("IMAGE_REQUEST_MIN_INTERVAL", "0")
 os.environ.setdefault("SCAN_MIN_INTERVAL", "0")
+# 適応的バックプレッシャーも既定で無効化（リトライ待機の検証を決定的に保つ）。
+# バックプレッシャー自体のテストは instance 属性を明示設定して行う。
+os.environ.setdefault("ADAPTIVE_BACKPRESSURE_STEP", "0")
