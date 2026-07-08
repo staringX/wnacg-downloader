@@ -11,6 +11,7 @@ from urllib.parse import quote
 
 from app.crawler import parsers
 from app.crawler.manga_details import _to_datetime
+from app.crawler.rate_limiter import scan_limiter
 from app.utils.logger import logger, get_error_message
 
 
@@ -47,6 +48,7 @@ class SearchCrawler:
                 visited.add(current_url)
                 logger.info(f"  访问第 {page_num} 页: {current_url}")
                 try:
+                    scan_limiter.acquire()  # 連続スキャンによる 429 回避（最小間隔）
                     html = self.client.get_html(current_url)
                 except Exception as e:
                     logger.warning(f"    页面获取失败: {get_error_message(e)}")

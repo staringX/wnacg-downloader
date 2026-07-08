@@ -33,13 +33,33 @@ class Settings(BaseSettings):
     # 一括の全線路が失敗した場合は自動的に従来方式へフォールバックする。
     archive_download_enabled: bool = True
 
-    # レート制限（サイト負荷への配慮）。**漫画ダウンロード時のみ**適用。リクエスト間の最小間隔[秒]。0 で無制限。
-    # 収藏夹同期・検索などのスキャン動作は軽量なため制限しない（HttpClient は throttle 無し）。
+    # レート制限（サイト負荷への配慮）。リクエスト間の最小間隔[秒]。0 で無制限。
     #   request_min_interval      : DL 時の view ページ取得（サイト本体）への最小間隔
     #   image_request_min_interval: DL 時の画像バイナリ取得（CDN）への最小間隔
+    #   scan_min_interval         : 収藏夹同期・検索など連続スキャンのページ取得への最小間隔
     # 並行数に関わらず実効レートは 1/間隔[req/s] に頭打ちになる（既定 0.3s ≈ 3.3 req/s）。
+    # ※スキャンは大量の連続 GET を発行するため、Cloudflare の 429（レート制限）を避ける目的で
+    #   スキャンにも間隔を設ける（本番同期で ~160 冊付近から 429 が多発したため導入）。
     request_min_interval: float = 0.3
     image_request_min_interval: float = 0.3
+    scan_min_interval: float = 0.5
+
+    # 429（Too Many Requests）を受けた際のリトライ時、Retry-After が無い/過大な場合の待機上限[秒]。
+    retry_after_cap: float = 30.0
+
+    # HTTP クライアントのブラウザ偽装（Cloudflare の TLS/JA3 指紋判定を回避）。
+    # curl_cffi の impersonate 指定（例: "chrome" / "chrome124" / "safari" 等）。
+    # 空文字にすると偽装せず通常の requests で動作する（curl_cffi 未導入時も requests へ回退）。
+    http_impersonate: str = "chrome"
+
+    # 適応的バックプレッシャー（Cloudflare 429 のカスケード防止）。
+    # 429 を観測するとクライアントが全リクエストを自動的に減速し（毎回 adaptive_step 秒ずつ増やし
+    # 上限 adaptive_max 秒）、CF のレート制限窓が回復してから徐々に通常速度へ戻す（成功ごとに
+    # adaptive_recover 秒ずつ減衰）。単純なリトライでは抜けられない長い制限窓に対して有効。
+    # 0 系（step=0）にすると無効化。
+    adaptive_backpressure_step: float = 0.75    # 429 ごとの増分[秒]
+    adaptive_backpressure_max: float = 8.0      # 追加遅延の上限[秒]
+    adaptive_backpressure_recover: float = 0.15  # 成功ごとの減衰[秒]
     
     # API配置
     api_host: str = "0.0.0.0"

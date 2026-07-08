@@ -1,6 +1,5 @@
 """下载业务服务"""
 import os
-import requests
 import zipfile
 import time
 import threading
@@ -12,6 +11,7 @@ from sqlalchemy.orm import Session
 from app.database import SessionLocal
 from app.models import Manga
 from app.crawler.base import MangaCrawler
+from app.crawler.http_client import impersonated_get
 from app.crawler.rate_limiter import image_limiter
 from app.config import settings
 from app.utils.logger import logger, get_error_message
@@ -109,22 +109,25 @@ class MangaDownloader:
         self.cover_dir.mkdir(parents=True, exist_ok=True)
     
     def download_image(self, url: str, save_path: Path) -> bool:
-        """下载单张图片"""
+        """下载单张图片
+
+        Chrome 偽装（curl_cffi）+ 429/一過性エラーのリトライで取得する。CDN が
+        Cloudflare 保護下でも通りやすく、レート制限にも粘る（impersonated_get）。
+        """
         try:
-            headers = {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-            }
             image_limiter.acquire()  # CDN 负载配慮: 最小间隔を空ける
-            response = requests.get(url, headers=headers, timeout=30)
-            response.raise_for_status()
-            
+            response = impersonated_get(url, timeout=(10.0, 30.0))
+            if response.status_code != 200:
+                logger.error(f"下载图片失败 {url}: HTTP {response.status_code}")
+                return False
+
             # 确保目录存在
             save_path.parent.mkdir(parents=True, exist_ok=True)
-            
+
             # 保存图片
             with open(save_path, 'wb') as f:
                 f.write(response.content)
-            
+
             return True
         except Exception as e:
             logger.error(f"下载图片失败 {url}: {e}")

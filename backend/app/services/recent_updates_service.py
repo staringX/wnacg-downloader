@@ -5,7 +5,6 @@ from datetime import datetime
 from app.database import SessionLocal
 from app.models import Manga, RecentUpdate, AppConfig
 from app.crawler.base import MangaCrawler
-from app.crawler.rate_limiter import site_limiter
 from app.config import settings
 from app.utils.logger import logger, get_error_message
 from app.services.task_manager import TaskManager
@@ -17,8 +16,10 @@ HANHUA_MARKERS = ("漢化", "汉化")
 
 
 def _is_hanhua(crawler, manga_url: str) -> bool:
-    """詳細ページの「分類」欄に「漢化/汉化」が含まれるか判定"""
-    site_limiter.acquire()  # サイト負荷への配慮（詳細ページ取得の最小間隔）
+    """詳細ページの「分類」欄に「漢化/汉化」が含まれるか判定
+
+    レート制限は get_manga_details 内の scan_limiter で担保される（二重取得しない）。
+    """
     details = crawler.get_manga_details(manga_url)
     category = (details or {}).get("category") or ""
     return any(marker in category for marker in HANHUA_MARKERS)
