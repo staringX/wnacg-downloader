@@ -84,6 +84,12 @@ def test_addfav_match_golden():
     assert out == _gold("addfav.json")
 
 
+def test_download_routes_match_golden():
+    out = parsers.parse_download_routes(
+        _read(os.path.join(FIX, "download_page.html")), _base())
+    assert out == _gold("download_routes.json")
+
+
 # ---------------------------------------------------------------------------
 # 2. オラクル検証（正しさの独立アンカー）
 #    ゴールデンが緑でも内容が壊れていないことを担保する不変条件。
@@ -120,6 +126,20 @@ def test_oracle_collection_has_items_with_urls():
         assert m["manga_url"].startswith("http")
         assert "photos-index-aid-" in m["manga_url"]
         assert m["title"]
+
+
+def test_oracle_download_routes_have_api_and_direct():
+    """下載線路: api 線路（WORKER_API/FILE_KEY）と direct 線路（.zip）が取れていること"""
+    g = _gold("download_routes.json")
+    assert len(g) >= 2, "線路が 2 本未満（Server 1 + 備用線路が取れていない）"
+    api = [r for r in g if r["type"] == "api"]
+    direct = [r for r in g if r["type"] == "direct"]
+    assert api, "api 線路（點擊下載/Server 1）が取れていない"
+    assert api[0]["worker_api"].startswith("http")
+    assert api[0]["file_key"].endswith(".zip")
+    assert direct, "direct 線路（備用線路）が取れていない"
+    assert direct[0]["url"].startswith("http")
+    assert ".zip" in direct[0]["url"]
 
 
 def test_oracle_categories_exclude_system_names():

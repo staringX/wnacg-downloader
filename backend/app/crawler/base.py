@@ -6,6 +6,7 @@ get_manga_details/get_manga_images/search_author_updates/base_url/get_available_
 from app.crawler.http_client import HttpClient
 from app.crawler.collection import CollectionCrawler
 from app.crawler.manga_details import MangaDetailsCrawler
+from app.crawler.archive_download import ArchiveDownloadCrawler
 from app.crawler.search import SearchCrawler
 
 
@@ -16,6 +17,7 @@ class MangaCrawler:
         self.client = HttpClient()
         self.collection = CollectionCrawler(self.client)
         self.details = MangaDetailsCrawler(self.client)
+        self.archive = ArchiveDownloadCrawler(self.client)
         self.search = SearchCrawler(self.client)
 
     @property
@@ -43,10 +45,19 @@ class MangaCrawler:
         """获取漫画的所有图片URL，按显示顺序"""
         return self.details.get_manga_images(manga_url)
 
+    def get_download_routes(self, manga_url: str):
+        """获取一括下载（ZIP）的可用线路列表"""
+        return self.archive.get_download_routes(manga_url)
+
+    def download_archive(self, routes, dest_path, progress_cb=None):
+        """按线路顺序下载 ZIP（失败自动切换线路）"""
+        return self.archive.download_archive(routes, dest_path, progress_cb)
+
     def search_author_updates(self, author_name: str, since_date):
         """搜索作者并获取更新"""
         return self.search.search_author_updates(author_name, since_date)
 
     def close(self):
         """关闭会话"""
+        self.archive.close()
         self.client.close()

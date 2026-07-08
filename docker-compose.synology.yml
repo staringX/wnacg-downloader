@@ -5,10 +5,12 @@
 #   - 后端和前端镜像从Docker Hub拉取（staringx/wnacg-downloader-*）
 #   - 无需本地构建，直接拉取预构建的镜像
 #   - 请确保已配置.env文件（环境变量）
+#   - 数据库默认使用 SQLite（/app/data/manga.db，通过 volume 持久化），
+#     无需再运行 PostgreSQL 容器。如需 PostgreSQL，设置 DATABASE_URL 即可。
 #
 # 前提设置
 #   - 根据想要设置的目录在NAS上创建文件夹，如：
-#     - /volume1/docker/wnacg-downloader/backend/downloads
+#     - /volume1/docker/wnacg-downloader/backend/data
 #     - /volume1/docker/wnacg-downloader/backend/covers
 #     - /volume1/docker/wnacg-downloader/backend/logs
 #     - /volume1/docker/komga/config
@@ -21,11 +23,8 @@
 #   - MANGA_DOWNLOAD_PATH: 漫画下载目录路径（与 Komga 共享）
 #
 # 可选变量配置（可不设置，默认值已提供）：
-#   - DB_USER: 数据库用户名
-#   - DB_PASSWORD: 数据库密码
-#   - DB_NAME: 数据库名称
+#   - DATABASE_URL: 数据库连接串（默认: SQLite。指定 postgresql://... 可继续用 PG）
 #   - NETWORK_NAME: 网络名称
-#   - DB_PORT: 数据库对外端口（默认：15432）
 #   - BACKEND_PORT: 应用对外端口（前端 + API 同源配信，默认：18000）
 #   - KOMGA_PORT: Komga对外端口（默认：25601）
 
@@ -33,34 +32,14 @@ x-common-restart: &common-restart
   restart: unless-stopped
 
 services:
-  db:
-    image: postgres:15-alpine
-    container_name: wnacg-downloader-db
-    environment:
-      POSTGRES_USER: ${DB_USER:-manga_user}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-manga_pass}
-      POSTGRES_DB: ${DB_NAME:-manga_db}
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    ports:
-      - "${DB_PORT:-15432}:5432"
-    <<: *common-restart
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-manga_user} -d ${DB_NAME:-manga_db}"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    networks:
-      - ${NETWORK_NAME:-wnacg-network}
-
   backend:
     # 方案B：该镜像同时配信前端静态资源与 API（前端已合并进后端镜像）
     image: staringx/wnacg-downloader-backend:latest-amd64
     container_name: wnacg-downloader-backend
     environment:
-      # 使用PostgreSQL数据库
-      # 注意：容器间通信使用容器内部端口 5432，不是对外暴露的端口
-      DATABASE_URL: postgresql://${DB_USER:-manga_user}:${DB_PASSWORD:-manga_pass}@db:5432/${DB_NAME:-manga_db}
+      # 数据库：默认 SQLite（文件存放在 /app/data，通过 volume 持久化）
+      # 如需 PostgreSQL，设置 DATABASE_URL=postgresql://user:pass@host:5432/db
+      DATABASE_URL: ${DATABASE_URL:-sqlite:////app/data/manga.db}
       # ⚠️【必填】漫画网站账号用户名
       MANGA_USERNAME: ${MANGA_USERNAME}
       # ⚠️【必填】漫画网站账号密码
@@ -80,12 +59,11 @@ services:
       - ${BASE_PATH:-/volume1/docker}/wnacg-downloader/backend/covers:/app/covers
       # ⚠️【必填】日志文件
       - ${BASE_PATH:-/volume1/docker}/wnacg-downloader/backend/logs:/app/logs
+      # ⚠️【必填】SQLite 数据库文件
+      - ${BASE_PATH:-/volume1/docker}/wnacg-downloader/backend/data:/app/data
     ports:
       # 前端 + API 同源配信（Web 访问入口）
       - "${BACKEND_PORT:-18000}:8000"
-    depends_on:
-      db:
-        condition: service_healthy
     <<: *common-restart
     networks:
       - ${NETWORK_NAME:-wnacg-network}
@@ -110,13 +88,7 @@ services:
     networks:
       - ${NETWORK_NAME:-wnacg-network}
 
-volumes:
-  # PostgreSQL数据库持久化存储
-  postgres_data:
-    driver: local
-
 networks:
   wnacg-network:
     name: ${NETWORK_NAME:-wnacg-network}
     driver: bridge
-

@@ -12,7 +12,7 @@
 
 编辑 `docker-compose.synology.yml` 文件，找到以下位置并修改：
 
-1. **修改 WNACG 账号信息**（第65-67行）：
+1. **修改 WNACG 账号信息**（`backend` 服务的 `environment` 部分）：
 ```yaml
 environment:
   # ⚠️【必填】漫画网站账号用户名 - 将 ${MANGA_USERNAME} 替换为你的实际用户名
@@ -21,7 +21,7 @@ environment:
   MANGA_PASSWORD: 你的WNACG密码
 ```
 
-2. **修改存储路径**（第78、80、82、117、119行）：
+2. **修改存储路径**（`backend` 服务的 `volumes` 部分）：
 ```yaml
 volumes:
   # ⚠️【必填】下载的漫画目录 - 将 ${MANGA_DOWNLOAD_PATH:-/volume1/scdata/comic/wnacg} 替换为你的实际路径
@@ -30,9 +30,11 @@ volumes:
   - /volume1/docker/wnacg-downloader/backend/covers:/app/covers
   # ⚠️【必填】日志文件目录
   - /volume1/docker/wnacg-downloader/backend/logs:/app/logs
+  # ⚠️【必填】SQLite 数据库文件目录
+  - /volume1/docker/wnacg-downloader/backend/data:/app/data
 ```
 
-在 `komga` 服务中（第117、119行）：
+在 `komga` 服务的 `volumes` 部分：
 ```yaml
 volumes:
   # ⚠️【必填】Komga 配置文件目录 - 将 ${BASE_PATH:-/volume1/docker} 替换为你的实际路径
@@ -70,6 +72,7 @@ environment:
 # 在群晖NAS上创建目录（根据你的 BASE_PATH 和 MANGA_DOWNLOAD_PATH 调整）
 mkdir -p /volume1/docker/wnacg-downloader/backend/covers
 mkdir -p /volume1/docker/wnacg-downloader/backend/logs
+mkdir -p /volume1/docker/wnacg-downloader/backend/data
 mkdir -p /volume1/docker/komga/config
 mkdir -p /volume1/scdata/comic/wnacg
 ```
@@ -120,10 +123,13 @@ docker-compose up -d
 
 #### ⬇️ 漫画下载
 **目的**：将收藏的漫画从网站爬取并下载到本地，自动打包为 CBZ 格式文件。
+- **一括下载（推荐，默认启用）**：利用详情页的「下載漫畫」按钮直接下载整本 ZIP，速度快、对站点负载小。
+  下载页提供多条线路（Server 1 / 備用線路），某条线路失败时自动切换下一条
+- **逐页下载（救济措施）**：当一括下载的所有线路都失败时，自动回退到传统的逐页爬取方式
 - **单本下载**：点击单本漫画的下载按钮，将该漫画加入下载队列
 - **批量下载**：点击"下载全部"按钮，将所有未下载的漫画加入下载队列
 - **自动排队**：下载任务自动排队执行，不会拒绝用户请求
-- **断点续传**：下载中断后可以自动恢复，跳过已下载的页面
+- **断点续传**：逐页下载中断后可以自动恢复，跳过已下载的页面
 
 #### 🔄 最近更新同步
 **目的**：根据收藏夹中保存的作者名，自动搜索这些作者的所有作品，找出更新日期晚于已保存漫画的更新日期的作品，帮助用户及时发现新内容。
@@ -248,10 +254,11 @@ pip install -r requirements.txt
 
 2. **配置环境变量**
 ```bash
-# 直接设置环境变量
-export DATABASE_URL=postgresql://manga_user:manga_pass@localhost:5432/manga_db
+# 直接设置环境变量（数据库默认使用 SQLite: backend/data/manga.db，无需配置）
 export MANGA_USERNAME=your_username
 export MANGA_PASSWORD=your_password
+# 可选：如需使用 PostgreSQL
+# export DATABASE_URL=postgresql://manga_user:manga_pass@localhost:5432/manga_db
 ```
 
 3. **启动服务**
@@ -286,7 +293,8 @@ npm run dev   # http://localhost:5173，/api 与 /api/events(SSE) 代理到后�
 | `MANGA_USERNAME` | WNACG 账号用户名 | 是 | `backend` 服务的 `environment` 部分 | `你的WNACG用户名` |
 | `MANGA_PASSWORD` | WNACG 账号密码 | 是 | `backend` 服务的 `environment` 部分 | `你的WNACG密码` |
 | `PUBLISH_PAGE_URL` | WNACG 发布页地址 | 否 | `backend` 服务的 `environment` 部分 | `https://wn01.link` |
-| `DATABASE_URL` | PostgreSQL数据库连接字符串 | 是（Docker 部署时自动配置） | `backend` 服务的 `environment` 部分 | `postgresql://manga_user:manga_pass@db:5432/manga_db` |
+| `DATABASE_URL` | 数据库连接字符串（默认 SQLite，无需配置；可指定 PostgreSQL） | 否 | `backend` 服务的 `environment` 部分 | `sqlite:////app/data/manga.db` |
+| `ARCHIVE_DOWNLOAD_ENABLED` | 是否启用一括下载（详情页「下載漫畫」→ 直接下载 ZIP）。`false` 时只用逐页下载 | 否 | `backend` 服务的 `environment` 部分 | `true` |
 | `DOWNLOAD_DIR` | 下载目录（容器内路径） | 否 | `backend` 服务的 `environment` 部分 | `/app/downloads` |
 | `COVER_DIR` | 封面目录（容器内路径） | 否 | `backend` 服务的 `environment` 部分 | `/app/covers` |
 | `CORS_ORIGINS` | CORS允许的来源（JSON数组；方案B 下前端与API同源，一般无需配置） | 否 | `backend` 服务的 `environment` 部分 | `["http://localhost:18000"]` |
@@ -305,13 +313,14 @@ npm run dev   # http://localhost:5173，/api 与 /api/events(SSE) 代理到后�
 
 ### 数据库
 
-系统使用 **PostgreSQL 15** 作为数据库，支持：
-- 自动创建表结构
-- 数据持久化存储
-- 事务支持
-- 索引优化
+系统默认使用 **SQLite**（单用户、低写入频度场景下完全够用），支持：
+- 自动创建表结构（启动时自动迁移）
+- 数据持久化存储（单文件，WAL 模式）
+- 无需额外的数据库容器，部署更简单
 
-**Docker部署**：数据存储在 `postgres_data` volume 中，重启不丢失。
+**Docker部署**：数据库文件存储在 `/app/data/manga.db`（通过 volume 挂载持久化），重启不丢失。
+
+如需 PostgreSQL，设置 `DATABASE_URL=postgresql://user:pass@host:5432/db` 即可继续使用（需自行运行 PG 实例）。
 
 ## 📡 API接口
 
@@ -385,14 +394,13 @@ npm run dev   # http://localhost:5173，/api 与 /api/events(SSE) 代理到后�
 ### 后端
 - **框架**: FastAPI (Python 3.11)
 - **ORM**: SQLAlchemy 2.0
-- **数据库**: PostgreSQL 15
+- **数据库**: SQLite（默认，单文件）/ PostgreSQL（可选，通过 DATABASE_URL 指定）
 - **爬虫**: requests + BeautifulSoup（HTTP 直取，无浏览器依赖）
 - **日志**: loguru
 - **任务管理**: 自定义任务管理系统 + SSE
 
 ### 基础设施
-- **容器化**: Docker, Docker Compose（已移除 Chromium，镜像更轻量）
-- **数据库**: PostgreSQL 15 (Alpine)
+- **容器化**: Docker, Docker Compose（已移除 Chromium 和 PostgreSQL 容器，更轻量）
 - **漫画阅读器**: Komga（可选，已集成）
 
 ## 📁 数据存储
@@ -408,7 +416,7 @@ backend/
 │   ├── manga_YYYY-MM-DD.log      # 详细日志
 │   ├── error_YYYY-MM-DD.log      # 错误日志
 │   └── crawler_YYYY-MM-DD.log    # 爬虫日志
-└── data/            # 其他数据文件
+└── data/            # SQLite 数据库文件（manga.db）等
 ```
 
 ### ComicInfo.xml 元数据
@@ -488,6 +496,15 @@ curl http://localhost:18000/api/tasks/running/list?task_type=download
 ```
 
 ## 📝 更新日志
+
+### v3.1.0
+- ✅ **一括下载（ZIP 直接下载）**：适配 2026-07 站点改版新增的详情页「下載漫畫」按钮，直接下载整本 ZIP 后转换为 CBZ（追加 ComicInfo.xml + 提取封面，不重新压缩），速度大幅提升、对站点负载更小
+  - 下载页的多条线路（Server 1 / 備用線路）按顺序尝试，某条线路失败时自动切换下一条
+  - 全部线路失败时自动回退到传统的逐页下载方式（救济措施），可用 `ARCHIVE_DOWNLOAD_ENABLED=false` 关闭一括下载
+  - ZIP 配信主机使用 Cloudflare TLS 指纹检测拦截普通 HTTP 客户端，因此引入 `curl_cffi`（Chrome 指纹伪装）用于 ZIP 获取
+- ✅ **数据库默认切换为 SQLite**（WAL 模式）：单用户・低写入频度场景无需数据库服务器
+  - 移除 docker-compose 中的 PostgreSQL 容器，部署更简单、占用更少
+  - 通过 `DATABASE_URL` 仍可继续使用 PostgreSQL（不做数据迁移，重新同步收藏夹即可恢复数据）
 
 ### v3.0.0
 - ✅ **前端从 Next.js 重构为 React + Vite（SPA）**，生产构建与后端 API 同源配信（方案B）
