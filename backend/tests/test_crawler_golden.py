@@ -149,6 +149,16 @@ def test_oracle_categories_exclude_system_names():
         assert name not in parsers.EXCLUDED_CATEGORY_NAMES
 
 
+def test_oracle_category_hrefs_have_no_surrounding_whitespace():
+    """サイトの HTML は href 内に末尾スペースを含む（例: "...c-841611.html "）。
+    そのまま requests に渡すと %20 付きの存在しないページを取得し、
+    2 個目以降のシェルフが 0 冊になる。パーサ出力は必ず strip 済みであること。"""
+    out = parsers.parse_favorite_categories(_read(os.path.join(FIX, "shelf.html")))
+    assert len(out) > 0
+    for name, href in out.items():
+        assert href == href.strip(), f"{name}: href に前後空白が残っている: {href!r}"
+
+
 # ---------------------------------------------------------------------------
 # 3. 純粋性（同一入力 → 同一出力）の確認
 # ---------------------------------------------------------------------------

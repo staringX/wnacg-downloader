@@ -21,6 +21,12 @@ def _abs_url(href: Optional[str], base: str) -> Optional[str]:
     """相対 URL / 協議相対 URL を絶対化（current crawler のロジックに準拠）"""
     if not href:
         return None
+    # サイトの HTML は href 属性内に末尾スペースを含むことがある
+    # （例: href="/users-users_fav-c-841611.html "）。requests は末尾空白を
+    # %20 にエンコードして送るため、除去しないと存在しないページを取得してしまう。
+    href = href.strip()
+    if not href:
+        return None
     base = base.rstrip("/")
     if href.startswith("//"):
         # 協議相対 URL。多重スラッシュ（例: ////host/...）はブラウザ解決と同様に正規化
@@ -56,8 +62,9 @@ def parse_favorite_categories(html: str) -> Dict[str, str]:
     cats: Dict[str, str] = {}
     for a in soup.select("a[href*='users-users_fav-c-']"):
         text = a.get_text(strip=True)
-        if text and text not in EXCLUDED_CATEGORY_NAMES:
-            cats[text] = a.get("href")
+        href = (a.get("href") or "").strip()
+        if text and href and text not in EXCLUDED_CATEGORY_NAMES:
+            cats[text] = href
     return cats
 
 
