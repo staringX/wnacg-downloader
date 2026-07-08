@@ -281,6 +281,51 @@ def parse_search_page(html: str, base: str, author: str = "") -> List[Dict]:
 
 
 # ---------------------------------------------------------------------------
+# 一括ダウンロード（download-index-aid-*）ページ
+# ---------------------------------------------------------------------------
+def parse_download_routes(html: str, base: str) -> List[Dict]:
+    """ダウンロードページから ZIP 取得の線路を優先順で抽出
+
+    線路は 2 種類（2026-07 改版の実ページで確認）:
+    1. api   : <script> 内 CONFIG の WORKER_API へ {file_key, file_name} を POST し
+               署名付き URL を得る（頁面の「點擊下載 (Server 1)」に相当）
+    2. direct: .zip を含む <a href> の直接リンク（「備用線路 (Server 2)」等）
+
+    Returns: [{"type": "api", "worker_api", "file_key", "file_name"} |
+              {"type": "direct", "url"}]
+    """
+    routes: List[Dict] = []
+
+    # CONFIG ブロック（JS）から api 線路を抽出
+    def _js_str(key: str) -> Optional[str]:
+        m = re.search(rf'{key}\s*:\s*"([^"]+)"', html)
+        return m.group(1) if m else None
+
+    worker_api = _js_str("WORKER_API")
+    file_key = _js_str("FILE_KEY")
+    if worker_api and file_key:
+        routes.append({
+            "type": "api",
+            "worker_api": worker_api,
+            "file_key": file_key,
+            "file_name": _js_str("FILE_NAME") or "",
+        })
+
+    # .zip 直接リンク（備用線路）を表示順で抽出
+    soup = _soup(html)
+    seen = set()
+    for a in soup.select("a[href]"):
+        href = a.get("href", "")
+        if ".zip" not in href.lower():
+            continue
+        url = _abs_url(href, base)
+        if url and url not in seen:
+            seen.add(url)
+            routes.append({"type": "direct", "url": url})
+    return routes
+
+
+# ---------------------------------------------------------------------------
 # 収藏フォーム
 # ---------------------------------------------------------------------------
 def parse_addfav_form(html: str) -> Dict[str, str]:

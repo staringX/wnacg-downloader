@@ -1,11 +1,14 @@
 fastapi==0.115.0
 uvicorn[standard]==0.32.0
 sqlalchemy==2.0.36
+# PostgreSQL 驱动（默认数据库为 SQLite；仅在 DATABASE_URL 指定 PG 时需要）
 psycopg2-binary==2.9.9
 alembic==1.14.0
 pydantic==2.9.2
 pydantic-settings==2.6.1
 requests==2.32.3
+# 一括下载（ZIP）用: 配信ホストの Cloudflare TLS 指紋判定を通すため Chrome を偽装
+curl_cffi==0.15.0
 beautifulsoup4==4.12.3
 lxml==5.3.0
 pillow==11.0.0

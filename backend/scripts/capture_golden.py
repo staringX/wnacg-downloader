@@ -138,6 +138,17 @@ def main():
             orig = parsers.parse_original_image(view_html)
             save_golden("original_image.json", {"view_url": views[0], "original_url": orig})
 
+        # 3.5) 一括ダウンロードページ（下載線路）
+        print("\n[3.5] 一括ダウンロードページ")
+        import re as _re
+        m = _re.search(r"photos-index-aid-(\d+)\.html", sample_url)
+        if m:
+            dl_html = get(f"{base}/download-index-aid-{m.group(1)}.html")
+            save_html("download_page.html", dl_html)
+            routes = parsers.parse_download_routes(dl_html, base)
+            save_golden("download_routes.json", routes)
+            manifest["download_routes"] = len(routes)
+
     # 4) 検索（最初のカテゴリ名で）
     if cats:
         print("\n[4] 検索")

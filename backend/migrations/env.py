@@ -73,7 +73,11 @@ def run_migrations_online() -> None:
 
     with connectable.connect() as connection:
         context.configure(
-            connection=connection, target_metadata=target_metadata
+            connection=connection,
+            target_metadata=target_metadata,
+            # SQLite は ALTER TABLE の制約が強いため batch モードで実行する
+            # （PostgreSQL では no-op なので常時有効で問題ない）
+            render_as_batch=True,
         )
 
         with context.begin_transaction():

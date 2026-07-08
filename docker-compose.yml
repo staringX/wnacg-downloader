@@ -1,24 +1,4 @@
 services:
-  db:
-    image: postgres:15-alpine
-    container_name: wnacg-downloader-db
-    environment:
-      POSTGRES_USER: manga_user
-      POSTGRES_PASSWORD: manga_pass
-      POSTGRES_DB: manga_db
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    ports:
-      - "15432:5432"
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U manga_user -d manga_db"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    networks:
-      - wnacg-network
-
   backend:
     # 方案B：后端镜像同时配信前端静态资源（多阶段构建，上下文为仓库根目录）
     build:
@@ -26,8 +6,9 @@ services:
       dockerfile: Dockerfile
     container_name: wnacg-downloader-backend
     environment:
-      # 使用PostgreSQL数据库
-      DATABASE_URL: postgresql://manga_user:manga_pass@db:5432/manga_db
+      # 默认使用 SQLite（/app/data/manga.db，通过 volume 持久化）
+      # 如需 PostgreSQL，设置 DATABASE_URL 环境变量即可（例: postgresql://user:pass@host:5432/db）
+      DATABASE_URL: ${DATABASE_URL:-sqlite:////app/data/manga.db}
       MANGA_USERNAME: ${MANGA_USERNAME}
       MANGA_PASSWORD: ${MANGA_PASSWORD}
       PUBLISH_PAGE_URL: ${PUBLISH_PAGE_URL:-https://wn01.link}
@@ -44,12 +25,11 @@ services:
       - ./komga-data:/app/downloads
       # 封面图片
       - ./backend/covers:/app/covers
+      # SQLite 数据库文件
+      - ./backend/data:/app/data
     ports:
       # 前端 + API 同一进程同源配信（访问入口）
       - "18000:8000"
-    depends_on:
-      db:
-        condition: service_healthy
     restart: unless-stopped
     networks:
       - wnacg-network
@@ -73,10 +53,6 @@ services:
       - ./komga-data:/data
     networks:
       - wnacg-network
-
-volumes:
-  # PostgreSQL数据库持久化存储
-  postgres_data:
 
 networks:
   wnacg-network:
