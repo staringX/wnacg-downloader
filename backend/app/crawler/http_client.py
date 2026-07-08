@@ -25,6 +25,11 @@ UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
 DEFAULT_TIMEOUT: Tuple[float, float] = (10.0, 30.0)
 DEFAULT_MAX_RETRIES = 3
 DEFAULT_BACKOFF = 0.5  # 指数バックオフ基準（秒）: 0.5, 1.0, 2.0, ...
+# 429（Cloudflare のレート制限チャレンジ）は接続エラーより粘り強くリトライする。
+# 実測では 429 の多くは数秒待てば解消するが、瞬間的な再試行では抜けられないため
+# 専用の予算・待機下限を設ける（接続リトライの予算とは独立に消費する）。
+DEFAULT_MAX_RETRIES_429 = 5
+DEFAULT_MIN_WAIT_429 = 2.0  # 429 リトライ時の最小待機秒（CF の制限窓を跨ぐため）
 
 # ログイン仕様（フェーズ0 PoC / capture_golden.py で実証済み）
 LOGIN_PATH = "/users-check_login.html"
@@ -44,6 +49,8 @@ class HttpClient:
         timeout: Tuple[float, float] = DEFAULT_TIMEOUT,
         max_retries: int = DEFAULT_MAX_RETRIES,
         backoff: float = DEFAULT_BACKOFF,
+        max_retries_429: int = DEFAULT_MAX_RETRIES_429,
+        min_wait_429: float = DEFAULT_MIN_WAIT_429,
     ):
         self.base_url: Optional[str] = base_url.rstrip("/") if base_url else None
         self.session = session or requests.Session()
@@ -51,6 +58,8 @@ class HttpClient:
         self.timeout = timeout
         self.max_retries = max_retries
         self.backoff = backoff
+        self.max_retries_429 = max_retries_429
+        self.min_wait_429 = min_wait_429
 
     # ------------------------------------------------------------------
     # 取得（リトライ/タイムアウト/文字コード）
@@ -58,13 +67,32 @@ class HttpClient:
     def get(self, url: str, **kwargs) -> requests.Response:
         """GET（指数バックオフ付きリトライ・接続/読取タイムアウト）
 
-        接続・読取・5xx を一過性とみなしてリトライ。最終的に失敗した場合は例外を送出。
+        接続・読取・5xx・429（レート制限）を一過性とみなしてリトライ。
+        429 の場合は Retry-After ヘッダを尊重し（無ければ指数バックオフ）待機してから再試行する。
+        最終的に失敗した場合は例外を送出（429 が続いた場合は最後の 429 レスポンスを返す）。
         """
         kwargs.setdefault("timeout", self.timeout)
         last_exc: Optional[Exception] = None
-        for attempt in range(1, self.max_retries + 1):
+        last_429: Optional[requests.Response] = None
+        err_attempt = 0    # 接続/読取/5xx のリトライ回数
+        r429_attempt = 0   # 429 のリトライ回数（独立予算）
+        while True:
             try:
                 resp = self.session.get(url, **kwargs)
+                if resp.status_code == 429:
+                    # レート制限（多くは CF の「Just a moment...」チャレンジ）。
+                    # 接続エラーとは別予算で、待機下限を設けて粘り強く再試行する。
+                    last_429 = resp
+                    r429_attempt += 1
+                    if r429_attempt >= self.max_retries_429:
+                        break
+                    wait = max(self._retry_after_seconds(resp, r429_attempt),
+                               self.min_wait_429)
+                    logger.warning(
+                        f"GET 429 レート制限（{r429_attempt}/{self.max_retries_429}）"
+                        f"{url} → {wait:.1f}s 待機して再試行")
+                    time.sleep(wait)
+                    continue
                 if resp.status_code >= 500:
                     raise requests.HTTPError(
                         f"server error {resp.status_code}", response=resp)
@@ -72,24 +100,63 @@ class HttpClient:
             except (requests.ConnectionError, requests.Timeout,
                     requests.HTTPError) as e:
                 last_exc = e
-                if attempt >= self.max_retries:
+                err_attempt += 1
+                if err_attempt >= self.max_retries:
                     break
-                wait = self.backoff * (2 ** (attempt - 1))
+                wait = self.backoff * (2 ** (err_attempt - 1))
                 logger.warning(
-                    f"GET 失敗（{attempt}/{self.max_retries}）{url}: "
+                    f"GET 失敗（{err_attempt}/{self.max_retries}）{url}: "
                     f"{get_error_message(e)} → {wait:.1f}s 後に再試行")
                 time.sleep(wait)
+        # 429 が最後まで解消しなかった場合は、例外ではなく 429 レスポンスを返す
+        # （呼び出し側の診断ログで status/内容を出せるようにするため）
+        if last_429 is not None and last_exc is None:
+            logger.error(f"GET 429 継続（レート制限が解消せず）{url}")
+            return last_429
         logger.error(f"GET 最終失敗 {url}: "
                      f"{get_error_message(last_exc) if last_exc else 'unknown'}")
         raise last_exc if last_exc else RuntimeError(f"GET failed: {url}")
 
-    def get_html(self, url: str, **kwargs) -> str:
-        """GET してエンコーディングを補正した HTML 文字列を返す（parsers 入力用）"""
+    def _retry_after_seconds(self, resp: requests.Response, attempt: int) -> float:
+        """429 応答の待機秒数を決める。Retry-After（秒数 or HTTP-date）を尊重し上限でクランプ。
+
+        ヘッダが無い場合は指数バックオフ（backoff * 2^(attempt-1)）にフォールバックする。
+        """
+        cap = getattr(settings, "retry_after_cap", 30.0)
+        header = resp.headers.get("Retry-After")
+        if header:
+            header = header.strip()
+            # 数値（秒）形式
+            try:
+                return max(0.0, min(float(header), cap))
+            except ValueError:
+                pass
+            # HTTP-date 形式
+            try:
+                from email.utils import parsedate_to_datetime
+                from datetime import datetime, timezone
+                dt = parsedate_to_datetime(header)
+                if dt is not None:
+                    if dt.tzinfo is None:
+                        dt = dt.replace(tzinfo=timezone.utc)
+                    delta = (dt - datetime.now(timezone.utc)).total_seconds()
+                    return max(0.0, min(delta, cap))
+            except (TypeError, ValueError):
+                pass
+        # フォールバック: 指数バックオフ（上限クランプ）
+        return min(self.backoff * (2 ** (attempt - 1)), cap)
+
+    def get_page(self, url: str, **kwargs) -> requests.Response:
+        """GET してエンコーディングを補正した Response を返す（診断用に status 等へアクセス可）"""
         resp = self.get(url, **kwargs)
         # サーバが charset を返さない場合があるため apparent_encoding で補正（R4）
         if not resp.encoding or resp.encoding.lower() == "iso-8859-1":
             resp.encoding = resp.apparent_encoding or "utf-8"
-        return resp.text
+        return resp
+
+    def get_html(self, url: str, **kwargs) -> str:
+        """GET してエンコーディングを補正した HTML 文字列を返す（parsers 入力用）"""
+        return self.get_page(url, **kwargs).text
 
     def get_soup(self, url: str, **kwargs) -> BeautifulSoup:
         """GET してエンコーディングを補正し BeautifulSoup を返す"""

@@ -4,11 +4,13 @@
 リクエストの開始を min_interval 秒ずつ間引くことで、実効レートを 1/min_interval [req/s] に
 頭打ちにする。並行はレイテンシ隠蔽のためだけに働く。
 
-**漫画ダウンロード時のみ**適用する（収藏夹同期・検索などのスキャン動作は軽量なため非適用）:
+適用箇所:
 - site_limiter : DL 時の view ページ取得（get_manga_images）に適用。
 - image_limiter: DL 時の画像バイナリ取得（download_service.download_image, CDN）に適用。
+- scan_limiter : 収藏夹同期・検索など連続スキャンのページ取得に適用（Cloudflare 429 回避）。
 
-間隔は設定（REQUEST_MIN_INTERVAL / IMAGE_REQUEST_MIN_INTERVAL、秒）で可変。0 で無制限。
+間隔は設定（REQUEST_MIN_INTERVAL / IMAGE_REQUEST_MIN_INTERVAL / SCAN_MIN_INTERVAL、秒）で
+可変。0 で無制限。
 """
 import threading
 import time
@@ -46,3 +48,4 @@ class RateLimiter:
 # プロセス共有のシングルトン（並行ダウンロード間でもレートを共有する）
 site_limiter = RateLimiter(settings.request_min_interval)
 image_limiter = RateLimiter(settings.image_request_min_interval)
+scan_limiter = RateLimiter(settings.scan_min_interval)
