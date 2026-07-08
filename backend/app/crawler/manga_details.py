@@ -11,7 +11,7 @@ from typing import Dict, List, Optional
 
 from app.config import settings
 from app.crawler import parsers
-from app.crawler.rate_limiter import site_limiter
+from app.crawler.rate_limiter import site_limiter, scan_limiter
 from app.utils.logger import logger, get_error_message
 
 
@@ -32,6 +32,7 @@ class MangaDetailsCrawler:
         """
         try:
             base = (self.base_url or "").rstrip("/")
+            scan_limiter.acquire()  # 同期スキャンによる 429 回避（詳情ページ取得の最小間隔）
             html = self.client.get_html(manga_url)
             data = parsers.parse_details(html, manga_url=manga_url, base=base)
 

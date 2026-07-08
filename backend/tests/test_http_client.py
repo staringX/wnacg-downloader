@@ -175,6 +175,73 @@ def test_get_raises_after_exhausting_retries(monkeypatch):
 
 
 # ---------------------------------------------------------------------------
+# 429（レート制限）リトライ
+# ---------------------------------------------------------------------------
+def test_get_retries_on_429_then_succeeds(monkeypatch):
+    slept = []
+    monkeypatch.setattr("app.crawler.http_client.time.sleep", lambda s: slept.append(s))
+    r429 = FakeResponse(status_code=429)
+    r429.headers = {"Retry-After": "3"}
+    ok = FakeResponse(text="ok", status_code=200)
+    session = FakeSession(get_responses=[r429, ok])
+    client = HttpClient(base_url=BASE, session=session)
+    resp = client.get(f"{BASE}/x")
+    assert resp is ok
+    assert len(session.get_calls) == 2
+    # Retry-After: 3 を尊重して 3 秒待機（下限 2.0 より大きいのでそのまま）
+    assert slept == [3.0]
+
+
+def test_get_429_respects_retry_after_cap(monkeypatch):
+    slept = []
+    monkeypatch.setattr("app.crawler.http_client.time.sleep", lambda s: slept.append(s))
+    r429 = FakeResponse(status_code=429)
+    r429.headers = {"Retry-After": "99999"}  # 過大値
+    ok = FakeResponse(text="ok", status_code=200)
+    session = FakeSession(get_responses=[r429, ok])
+    client = HttpClient(base_url=BASE, session=session)
+    client.get(f"{BASE}/x")
+    # retry_after_cap（既定 30s）でクランプされる
+    assert slept and slept[0] <= 30.0
+
+
+def test_get_429_without_header_applies_min_wait_floor(monkeypatch):
+    slept = []
+    monkeypatch.setattr("app.crawler.http_client.time.sleep", lambda s: slept.append(s))
+    r429 = FakeResponse(status_code=429)  # Retry-After 無し
+    ok = FakeResponse(text="ok", status_code=200)
+    session = FakeSession(get_responses=[r429, ok])
+    client = HttpClient(base_url=BASE, session=session, backoff=0.5, min_wait_429=2.0)
+    client.get(f"{BASE}/x")
+    # 指数バックオフ 0.5s より待機下限 2.0s が優先される（CF 制限窓を跨ぐため）
+    assert slept == [2.0]
+
+
+def test_get_429_uses_independent_budget(monkeypatch):
+    """429 は接続リトライ(max_retries)とは別予算(max_retries_429)で粘る"""
+    monkeypatch.setattr("app.crawler.http_client.time.sleep", lambda *_: None)
+    r429 = FakeResponse(status_code=429)
+    ok = FakeResponse(text="ok", status_code=200)
+    # max_retries=3 でも 429 は max_retries_429=5 まで粘り、4 回目で成功できる
+    session = FakeSession(get_responses=[r429, r429, r429, ok])
+    client = HttpClient(base_url=BASE, session=session,
+                        max_retries=3, max_retries_429=5)
+    resp = client.get(f"{BASE}/x")
+    assert resp is ok
+    assert len(session.get_calls) == 4
+
+
+def test_get_returns_last_429_when_not_resolved(monkeypatch):
+    """429 が最後まで解消しない場合は例外ではなく 429 レスポンスを返す（診断ログ用）"""
+    monkeypatch.setattr("app.crawler.http_client.time.sleep", lambda *_: None)
+    session = FakeSession(get_responses=[FakeResponse(status_code=429)] * 5)
+    client = HttpClient(base_url=BASE, session=session, max_retries_429=3)
+    resp = client.get(f"{BASE}/x")
+    assert resp.status_code == 429
+    assert len(session.get_calls) == 3
+
+
+# ---------------------------------------------------------------------------
 # ドメイン解決（発布ページ）
 # ---------------------------------------------------------------------------
 def test_resolve_from_publish_page_picks_first_reachable():

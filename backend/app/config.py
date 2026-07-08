@@ -33,13 +33,19 @@ class Settings(BaseSettings):
     # 一括の全線路が失敗した場合は自動的に従来方式へフォールバックする。
     archive_download_enabled: bool = True
 
-    # レート制限（サイト負荷への配慮）。**漫画ダウンロード時のみ**適用。リクエスト間の最小間隔[秒]。0 で無制限。
-    # 収藏夹同期・検索などのスキャン動作は軽量なため制限しない（HttpClient は throttle 無し）。
+    # レート制限（サイト負荷への配慮）。リクエスト間の最小間隔[秒]。0 で無制限。
     #   request_min_interval      : DL 時の view ページ取得（サイト本体）への最小間隔
     #   image_request_min_interval: DL 時の画像バイナリ取得（CDN）への最小間隔
+    #   scan_min_interval         : 収藏夹同期・検索など連続スキャンのページ取得への最小間隔
     # 並行数に関わらず実効レートは 1/間隔[req/s] に頭打ちになる（既定 0.3s ≈ 3.3 req/s）。
+    # ※スキャンは大量の連続 GET を発行するため、Cloudflare の 429（レート制限）を避ける目的で
+    #   スキャンにも間隔を設ける（本番同期で ~160 冊付近から 429 が多発したため導入）。
     request_min_interval: float = 0.3
     image_request_min_interval: float = 0.3
+    scan_min_interval: float = 0.5
+
+    # 429（Too Many Requests）を受けた際のリトライ時、Retry-After が無い/過大な場合の待機上限[秒]。
+    retry_after_cap: float = 30.0
     
     # API配置
     api_host: str = "0.0.0.0"
