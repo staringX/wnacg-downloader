@@ -2,6 +2,7 @@
 from sqlalchemy.orm import Session
 from typing import List
 from datetime import datetime
+from urllib.parse import urlsplit
 from app.database import SessionLocal
 from app.models import Manga, RecentUpdate, AppConfig
 from app.crawler.base import MangaCrawler
@@ -13,6 +14,13 @@ from app.services.sync_service import _record_synced_at
 
 # 詳細ページの「分類」欄がこれらの文字列を含む作品のみ「漢化」とみなす（簡体・繁体両対応）
 HANHUA_MARKERS = ("漢化", "汉化")
+
+
+def _url_key(manga_url: str) -> str:
+    """作品の同一性キー。ミラー切替でホストが変わっても同一作品と判定できるよう
+    パス部分（例: /photos-index-aid-12345.html）のみを使う。
+    """
+    return urlsplit(manga_url or "").path
 
 
 def _is_hanhua(crawler, manga_url: str) -> bool:
@@ -82,10 +90,20 @@ class RecentUpdatesService:
                 TaskManager.update_task(db, task_id, status="failed", error_message="登录失败")
                 return
             
+            # 前回取得分を全削除してから作り直す（毎回リストを再構築する）。
+            # 站点収藏（ハート）だけは URL 単位で引き継ぐ。
+            favorited_keys = {
+                _url_key(url) for (url,) in db.query(RecentUpdate.manga_url).filter(
+                    RecentUpdate.is_favorited.is_(True)
+                ).all()
+            }
+            total_deleted = db.query(RecentUpdate).delete()
+            db.commit()
+            logger.info(f"最近更新同步：清空旧数据 {total_deleted} 条（保留 {len(favorited_keys)} 条收藏状态）")
+
             total_added = 0
-            total_deleted = 0
             processed_authors = 0
-            
+
             # 对每个作者进行搜索和更新
             for idx, author in enumerate(author_list, 1):
                 try:
@@ -148,6 +166,7 @@ class RecentUpdatesService:
                                     updated_at=manga_data['updated_at'],
                                     page_count=manga_data.get('page_count'),
                                     cover_image_url=manga_data.get('cover_image_url'),
+                                    is_favorited=_url_key(manga_data['manga_url']) in favorited_keys,
                                     is_downloaded=False
                                 )
                                 db.add(new_update)
@@ -162,18 +181,7 @@ class RecentUpdatesService:
                                     raise
                     
                     db.commit()
-                    
-                    # 删除早于截止日期的记录（仅限该作者）
-                    deleted_count = db.query(RecentUpdate).filter(
-                        RecentUpdate.author == author,
-                        RecentUpdate.updated_at < since_date
-                    ).delete()
-                    
-                    if deleted_count > 0:
-                        db.commit()
-                        total_deleted += deleted_count
-                        logger.info(f"  作者 {author} 删除了 {deleted_count} 条旧记录")
-                    
+
                     processed_authors += 1
                     
                 except Exception as e:
@@ -192,11 +200,11 @@ class RecentUpdatesService:
                 status="completed",
                 progress=100,
                 completed_items=total_authors,
-                message=f"同步完成: 新增/更新 {total_added} 条，删除 {total_deleted} 条",
+                message=f"同步完成: 新增 {total_added} 条，清空旧数据 {total_deleted} 条",
                 result_data=f'{{"added_count": {total_added}, "deleted_count": {total_deleted}}}'
             )
             
-            logger.info(f"同步最近更新任务完成: 新增/更新 {total_added} 条，删除 {total_deleted} 条")
+            logger.info(f"同步最近更新任务完成: 新增 {total_added} 条，清空旧数据 {total_deleted} 条")
             
         except Exception as e:
             logger.error(f"同步最近更新任务失败: {get_error_message(e)}")
