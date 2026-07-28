@@ -27,11 +27,10 @@ def get_recent_updates(db: Session = Depends(get_db)):
 def sync_recent_updates(background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     """
     同步最近更新（异步任务模式，单例模式）
-    1. 获取所有已收藏的作者
-    2. 对每个作者，找到收藏夹中最新的漫画的更新时间
-    3. 清空RecentUpdate表（每次都重建列表，收藏状态按URL路径保留）
-    4. 搜索该作者，获取晚于该时间的所有漫画
-    5. 保存新更新到RecentUpdate表
+    对每个已收藏的作者：
+    1. 删除RecentUpdate中早于「收藏夹最新作更新日」的记录（掃除）
+    2. 以「RecentUpdate侧该作者最新作更新日」（无则用收藏夹最新作）为截止日，
+       爬取该作者，仅追加更新日更晚的作品，遇到更旧的作品即停止翻页
     """
     # 相互排他：他の同期が実行中なら拒否
     if is_any_sync_running():

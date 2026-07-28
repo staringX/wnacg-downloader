@@ -1,8 +1,8 @@
 """最近更新业务服务"""
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 from typing import List
 from datetime import datetime
-from urllib.parse import urlsplit
 from app.database import SessionLocal
 from app.models import Manga, RecentUpdate, AppConfig
 from app.crawler.base import MangaCrawler
@@ -14,13 +14,6 @@ from app.services.sync_service import _record_synced_at
 
 # 詳細ページの「分類」欄がこれらの文字列を含む作品のみ「漢化」とみなす（簡体・繁体両対応）
 HANHUA_MARKERS = ("漢化", "汉化")
-
-
-def _url_key(manga_url: str) -> str:
-    """作品の同一性キー。ミラー切替でホストが変わっても同一作品と判定できるよう
-    パス部分（例: /photos-index-aid-12345.html）のみを使う。
-    """
-    return urlsplit(manga_url or "").path
 
 
 def _is_hanhua(crawler, manga_url: str) -> bool:
@@ -90,34 +83,46 @@ class RecentUpdatesService:
                 TaskManager.update_task(db, task_id, status="failed", error_message="登录失败")
                 return
             
-            # 前回取得分を全削除してから作り直す（毎回リストを再構築する）。
-            # 站点収藏（ハート）だけは URL 単位で引き継ぐ。
-            favorited_keys = {
-                _url_key(url) for (url,) in db.query(RecentUpdate.manga_url).filter(
-                    RecentUpdate.is_favorited.is_(True)
-                ).all()
-            }
-            total_deleted = db.query(RecentUpdate).delete()
-            db.commit()
-            logger.info(f"最近更新同步：清空旧数据 {total_deleted} 条（保留 {len(favorited_keys)} 条收藏状态）")
-
             total_added = 0
+            total_deleted = 0
             processed_authors = 0
 
             # 对每个作者进行搜索和更新
             for idx, author in enumerate(author_list, 1):
                 try:
-                    since_date = author_latest_dates.get(author, datetime(2000, 1, 1))
-                    logger.info(f"搜索作者: {author}, 截止日期: {since_date}")
-                    
+                    # 収藏夹（Manga）側のこの作者の最新作の更新日。
+                    collection_latest = author_latest_dates.get(author, datetime(2000, 1, 1))
+
+                    # ステップ1：最近更新から、収藏夹の最新作より古い作品を削除する。
+                    # （収藏夹に追い付いた＝もう「新着」ではない作品の掃除）
+                    deleted = db.query(RecentUpdate).filter(
+                        RecentUpdate.author == author,
+                        RecentUpdate.updated_at < collection_latest,
+                    ).delete(synchronize_session=False)
+                    if deleted:
+                        db.commit()
+                        total_deleted += deleted
+                        logger.info(f"  作者 {author} 删除了 {deleted} 条早于收藏夹最新作的记录")
+
+                    # ステップ2：クロール打ち切り日 = 最近更新側のこの作者の最新作の
+                    # 更新日。ここより新しい作品だけ追加し、古い作品に当たったら打ち切る。
+                    # 最近更新が空（初回や全削除後）なら収藏夹の最新作を下限に使う。
+                    recent_latest = db.query(func.max(RecentUpdate.updated_at)).filter(
+                        RecentUpdate.author == author
+                    ).scalar() or datetime(2000, 1, 1)
+                    since_date = max(collection_latest, recent_latest)
+                    logger.info(
+                        f"搜索作者: {author}, 收藏夹最新={collection_latest}, "
+                        f"最近更新最新={recent_latest}, 截止日期={since_date}")
+
                     TaskManager.update_task(
                         db, task_id,
                         completed_items=idx - 1,
                         progress=int((idx - 1) / total_authors * 90),
                         message=f"正在搜索作者 {author} ({idx}/{total_authors})..."
                     )
-                    
-                    # 搜索作者并获取更新
+
+                    # 搜索作者并获取更新（since_date より新しい作品のみ・古い作品で打ち切り）
                     new_mangas = crawler.search_author_updates(author, since_date)
                     
                     if not new_mangas:
@@ -166,7 +171,6 @@ class RecentUpdatesService:
                                     updated_at=manga_data['updated_at'],
                                     page_count=manga_data.get('page_count'),
                                     cover_image_url=manga_data.get('cover_image_url'),
-                                    is_favorited=_url_key(manga_data['manga_url']) in favorited_keys,
                                     is_downloaded=False
                                 )
                                 db.add(new_update)
@@ -200,11 +204,11 @@ class RecentUpdatesService:
                 status="completed",
                 progress=100,
                 completed_items=total_authors,
-                message=f"同步完成: 新增 {total_added} 条，清空旧数据 {total_deleted} 条",
+                message=f"同步完成: 新增/更新 {total_added} 条，删除 {total_deleted} 条",
                 result_data=f'{{"added_count": {total_added}, "deleted_count": {total_deleted}}}'
             )
             
-            logger.info(f"同步最近更新任务完成: 新增 {total_added} 条，清空旧数据 {total_deleted} 条")
+            logger.info(f"同步最近更新任务完成: 新增/更新 {total_added} 条，删除 {total_deleted} 条")
             
         except Exception as e:
             logger.error(f"同步最近更新任务失败: {get_error_message(e)}")
