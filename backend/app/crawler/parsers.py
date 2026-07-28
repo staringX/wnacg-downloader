@@ -17,6 +17,23 @@ def _soup(html: str) -> BeautifulSoup:
     return BeautifulSoup(html, "html.parser")
 
 
+_AID_RE = re.compile(r"photos-index-aid-(\d+)")
+
+
+def extract_aid(manga_url: Optional[str]) -> Optional[str]:
+    """作品URLから aid（作品の安定ID）を取り出す。
+
+    manga_url は絶対URL（ミラーのホストを含む）で保存されるため、ホストが
+    変わると同じ作品でも文字列が変わる。ホストに依存しない aid を同一性キーと
+    して使うことで、ミラー切替を跨いだ既存判定・重複排除が可能になる。
+    抽出できなければ None（呼び出し側は URL 完全一致にフォールバックする）。
+    """
+    if not manga_url:
+        return None
+    m = _AID_RE.search(manga_url)
+    return m.group(1) if m else None
+
+
 def _abs_url(href: Optional[str], base: str) -> Optional[str]:
     """相対 URL / 協議相対 URL を絶対化（current crawler のロジックに準拠）"""
     if not href:

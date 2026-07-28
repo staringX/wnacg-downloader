@@ -6,6 +6,7 @@ from datetime import datetime
 from app.database import SessionLocal
 from app.models import Manga, AppConfig
 from app.crawler.base import MangaCrawler
+from app.crawler.parsers import extract_aid
 from app.config import settings
 from app.utils.logger import logger
 from app.services.task_manager import TaskManager
@@ -269,6 +270,46 @@ class SyncService:
         }
     
     @staticmethod
+    def _dedup_and_index_by_aid(db: Session) -> Dict[str, Manga]:
+        """既存 Manga を aid で索引化し、同一 aid の重複行を統合する。
+
+        ミラー切替でホストが変わると同一作品が別 URL の新規行として増えていた
+        （URL 完全一致の既存判定をすり抜ける）。ここで aid 単位に集約し、情報量の
+        多い行（ダウンロード済み > 収藏済み > CBZあり > 直近更新）を1行だけ残して
+        残りを削除する。aid を取れない行はグルーピング対象外（従来通り扱う）。
+
+        Returns: {aid: 残した Manga} のマップ。
+        """
+        groups: Dict[str, List[Manga]] = {}
+        for m in db.query(Manga).all():
+            aid = extract_aid(m.manga_url)
+            if aid:
+                groups.setdefault(aid, []).append(m)
+
+        def _completeness(m: Manga):
+            return (
+                1 if m.is_downloaded else 0,
+                1 if m.is_favorited else 0,
+                1 if m.cbz_file_path else 0,
+                m.updated_at_db or datetime.min,
+            )
+
+        index: Dict[str, Manga] = {}
+        removed = 0
+        for aid, rows in groups.items():
+            if len(rows) > 1:
+                rows.sort(key=_completeness, reverse=True)
+                for dup in rows[1:]:
+                    db.delete(dup)
+                    removed += 1
+            index[aid] = rows[0]
+
+        if removed:
+            db.commit()
+            logger.warning(f"收藏夹重复清理：合并同一作品(aid)的重复记录，删除 {removed} 条")
+        return index
+
+    @staticmethod
     def execute_sync_task(task_id: str, db: Session = None):
         """执行同步任务（后台任务）"""
         if not db:
@@ -302,16 +343,31 @@ class SyncService:
                 added_count = 0
                 updated_count = 0
                 processed_count = 0
-                
+
+                # 既存 Manga を aid（作品の安定ID）で索引化し、同時に重複行を統合。
+                # ミラー切替でホストが変わると同一作品が別 URL の新規行として増えて
+                # いたため、ここで aid 単位に集約してから同期する。
+                existing_by_aid = SyncService._dedup_and_index_by_aid(db)
+
                 # 生成器：每yield一个漫画，立即处理并保存
                 for item in crawler.get_collection_stream():
                     processed_count += 1
-                    
+
                     try:
-                        # 检查是否已存在
-                        existing = db.query(Manga).filter(Manga.manga_url == item['manga_url']).first()
-                        
+                        # 既存判定は aid で行う（ホスト非依存）。aid を取れない場合のみ
+                        # 従来通り URL 完全一致にフォールバック。
+                        aid = extract_aid(item['manga_url'])
+                        existing = existing_by_aid.get(aid) if aid else None
+                        if existing is None:
+                            existing = db.query(Manga).filter(
+                                Manga.manga_url == item['manga_url']).first()
+
                         if existing:
+                            # ミラー切替でホストが変わっていたら最新 URL へ更新
+                            # （古いホストのままだとダウンロードがデッドリンクになる）
+                            if existing.manga_url != item['manga_url']:
+                                existing.manga_url = item['manga_url']
+                                db.commit()
                             # 已存在，仅更新基本信息（如果需要）
                             if item.get('page_count') and not existing.page_count:
                                 existing.page_count = item['page_count']
@@ -346,6 +402,9 @@ class SyncService:
                                 db.add(manga)
                                 db.commit()
                                 db.refresh(manga)
+                                # 同一 run の後続ページで再登場しても重複追加しないよう索引へ登録
+                                if aid:
+                                    existing_by_aid[aid] = manga
                             except Exception as e:
                                 # 处理可能的唯一约束冲突（并发情况下可能发生）
                                 db.rollback()
