@@ -41,12 +41,20 @@ def title_matches_author(title: str, author: str) -> bool:
     return author in split_title_tokens(title)
 
 
-def _is_hanhua(crawler, manga_url: str) -> bool:
-    """詳細ページの「分類」欄に「漢化/汉化」が含まれるか判定
+def tags_match_author(details: dict, author: str) -> bool:
+    """詳細ページの「標籤」欄のタグのいずれかが作者名と完全一致するか
 
-    レート制限は get_manga_details 内の scan_limiter で担保される（二重取得しない）。
+    タイトルが `[作者名]` 形式でない作品（雜誌掲載作など）でも、標籤欄には
+    作者名タグが付いていることが多い。タイトル照合の救済として使う。
     """
-    details = crawler.get_manga_details(manga_url)
+    author = (author or "").strip()
+    if not author:
+        return False
+    return any((t or "").strip() == author for t in (details or {}).get("tags") or [])
+
+
+def _is_hanhua_details(details: dict) -> bool:
+    """詳細ページの「分類」欄に「漢化/汉化」が含まれるか判定"""
     category = (details or {}).get("category") or ""
     return any(marker in category for marker in HANHUA_MARKERS)
 
@@ -156,37 +164,53 @@ class RecentUpdatesService:
 
                     logger.info(f"  作者 {author} 找到 {len(new_mangas)} 个新更新")
 
-                    # 作者名フィルタ：タイトルを [ ] ( ) で切り分けたトークンに
-                    # 作者名と完全一致するものが無い作品は「別の作者」として除外する。
-                    # （漢化判定より前に実施し、無駄な詳細ページ取得を避ける）
+                    # 作者名フィルタ＋「漢化」フィルタ。
+                    # 作者判定は 2 段階：
+                    #   1. タイトルを [ ] ( ) で切り分けたトークンの完全一致（ページ取得なし）
+                    #   2. 不一致なら詳細ページの「標籤」欄のタグと完全一致するか
+                    # どちらにも一致しなければ「別の作者」として除外する。
+                    # 詳細ページは 1 作品につき 1 回だけ取得し、漢化判定と共用する。
                     before = len(new_mangas)
                     kept = []
+                    skipped_author = 0
+                    skipped_hanhua = 0
                     for md in new_mangas:
-                        if title_matches_author(md.get("title", ""), author):
-                            kept.append(md)
-                        else:
-                            logger.info(
-                                f"    作者名不一致，跳过: {md.get('title', 'Unknown')[:60]}")
-                    new_mangas = kept
-                    logger.info(f"  作者 {author} 作者名过滤: {before} → {len(new_mangas)}")
-                    if not new_mangas:
-                        continue
+                        title = md.get("title", "Unknown")
+                        title_ok = title_matches_author(md.get("title", ""), author)
 
-                    # 「漢化」フィルタ：詳細ページの分類欄で判定し、漢化作品のみ残す
-                    if hanhua_only:
-                        before = len(new_mangas)
-                        kept = []
-                        for md in new_mangas:
+                        # 詳細ページが要るのは「タイトル不一致の救済」か「漢化判定」のとき
+                        details = None
+                        if not title_ok or hanhua_only:
                             try:
-                                if _is_hanhua(crawler, md["manga_url"]):
-                                    kept.append(md)
+                                details = crawler.get_manga_details(md["manga_url"])
                             except Exception as e:
                                 logger.warning(
-                                    f"    漢化判定失败，跳过: {md.get('title', 'Unknown')[:40]} - {get_error_message(e)}")
-                        new_mangas = kept
-                        logger.info(f"  作者 {author} 漢化过滤: {before} → {len(new_mangas)}")
-                        if not new_mangas:
+                                    f"    详情获取失败，跳过: {title[:40]} - {get_error_message(e)}")
+                                continue
+                            if details is None:
+                                logger.warning(f"    详情获取失败，跳过: {title[:40]}")
+                                continue
+
+                        if not title_ok:
+                            if tags_match_author(details, author):
+                                logger.info(f"    标签命中作者名，保留: {title[:60]}")
+                            else:
+                                logger.info(f"    作者名不一致（标题・标签均无），跳过: {title[:60]}")
+                                skipped_author += 1
+                                continue
+
+                        if hanhua_only and not _is_hanhua_details(details):
+                            skipped_hanhua += 1
                             continue
+
+                        kept.append(md)
+
+                    new_mangas = kept
+                    logger.info(
+                        f"  作者 {author} 过滤: {before} → {len(new_mangas)}"
+                        f"（作者名不一致 {skipped_author} 件 / 非漢化 {skipped_hanhua} 件）")
+                    if not new_mangas:
+                        continue
 
                     # 保存新更新到数据库
                     for manga_data in new_mangas:
