@@ -165,8 +165,12 @@ def parse_details(html: str, manga_url: str = "", base: str = "") -> Dict:
 
     category = _label_text_after(soup, "分類：")
 
+    # 標籤：<div class="addtags">標籤：<a class="tagshow" href="/albums-index-tag-…">タグ</a>…</div>
+    # サイドバーのタグ雲などを拾わないよう addtags 区画に限定し、
+    # 見つからない場合のみページ全体から回退抽出する（改版対応）。
+    tag_scope = soup.select_one(".addtags") or soup
     tags = []
-    for a in soup.select("a[href*='albums-index-tag-']"):
+    for a in tag_scope.select("a[href*='albums-index-tag-']"):
         t = a.get_text(strip=True)
         if t and t != "+TAG":
             tags.append(t)
