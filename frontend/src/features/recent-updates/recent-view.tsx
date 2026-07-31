@@ -7,6 +7,7 @@ import { AuthorSectionHeader } from "@/components/common/author-section-header"
 import { AuthorFilter } from "@/components/common/author-filter"
 import { LastUpdated, SyncingNotice } from "@/components/common/status-line"
 import { groupByAuthor, filterByAuthors, uniqueAuthors } from "@/features/collection/logic"
+import { useIsMobile } from "@/hooks/use-mobile"
 
 interface RecentViewProps {
   updates: RecentUpdate[]
@@ -39,6 +40,32 @@ export function RecentView(props: RecentViewProps) {
   const [group, setGroup] = useState(false)
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
   const [selectedAuthors, setSelectedAuthors] = useState<Set<string>>(new Set())
+  const isMobile = useIsMobile()
+
+  // モバイルでは 3 ボタンで幅を等分し、ラベルは折り返さない
+  const actionBtn: React.CSSProperties = {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: isMobile ? 5 : 7,
+    height: 36,
+    padding: isMobile ? "0 8px" : "0 13px",
+    borderRadius: 10,
+    fontSize: isMobile ? 12.5 : 13,
+    fontWeight: 500,
+    whiteSpace: "nowrap",
+    overflow: "hidden",
+    // auto ベースで按分（内容が収まる限り等幅より自然、狭い端末では均等に縮む）
+    flex: isMobile ? "1 1 auto" : "0 0 auto",
+    minWidth: 0,
+  }
+
+  // 狭い端末でラベルがボタンからはみ出さないよう省略記号にする
+  const label: React.CSSProperties = {
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    minWidth: 0,
+  }
 
   const authors = useMemo(() => uniqueAuthors(updates), [updates])
   const visible = useMemo(() => filterByAuthors(updates, selectedAuthors), [updates, selectedAuthors])
@@ -91,50 +118,55 @@ export function RecentView(props: RecentViewProps) {
             检索收藏作者的最新更新，一键收藏或下载。
           </div>
         </div>
-        <AuthorFilter authors={authors} selected={selectedAuthors} onChange={setSelectedAuthors} />
-        <button
-          onClick={() => setGroup((g) => !g)}
+        {/* 操作ボタン群：モバイルでは説明文の下に 1 行で並べる（折り返さず横幅を分け合う） */}
+        <div
           style={{
-            display: "inline-flex",
+            display: "flex",
+            flexWrap: "nowrap",
             alignItems: "center",
-            gap: 7,
-            height: 36,
-            padding: "0 13px",
-            borderRadius: 10,
-            fontSize: 13,
-            fontWeight: 500,
-            border: `1px solid ${group ? "var(--accent)" : "var(--border)"}`,
-            background: group ? "var(--accent-soft)" : "var(--surface)",
-            color: group ? "var(--accent)" : "var(--text)",
+            gap: isMobile ? 8 : 12,
+            flex: isMobile ? "1 1 100%" : "0 0 auto",
+            minWidth: 0,
           }}
         >
-          <Users size={15} />
-          按作者分组
-        </button>
-        <button
-          onClick={onSync}
-          disabled={syncDisabled}
-          title={syncDisabled ? "下载或更新进行中，暂不可检索" : undefined}
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 7,
-            height: 36,
-            padding: "0 15px",
-            borderRadius: 10,
-            border: "none",
-            background: "var(--gradient)",
-            color: "#fff",
-            fontSize: 13,
-            fontWeight: 600,
-            opacity: syncDisabled ? 0.5 : 1,
-            cursor: syncDisabled ? "not-allowed" : "pointer",
-            boxShadow: "0 6px 16px color-mix(in srgb, var(--accent) 40%, transparent)",
-          }}
-        >
-          <Search size={15} className={isSyncing ? "anim-spin" : undefined} />
-          检索新作
-        </button>
+          <AuthorFilter
+            authors={authors}
+            selected={selectedAuthors}
+            onChange={setSelectedAuthors}
+            compact={isMobile}
+          />
+          <button
+            onClick={() => setGroup((g) => !g)}
+            style={{
+              ...actionBtn,
+              border: `1px solid ${group ? "var(--accent)" : "var(--border)"}`,
+              background: group ? "var(--accent-soft)" : "var(--surface)",
+              color: group ? "var(--accent)" : "var(--text)",
+            }}
+          >
+            <Users size={15} style={{ flexShrink: 0 }} />
+            <span style={label}>按作者分组</span>
+          </button>
+          <button
+            onClick={onSync}
+            disabled={syncDisabled}
+            title={syncDisabled ? "下载或更新进行中，暂不可检索" : undefined}
+            style={{
+              ...actionBtn,
+              padding: isMobile ? "0 8px" : "0 15px",
+              border: "none",
+              background: "var(--gradient)",
+              color: "#fff",
+              fontWeight: 600,
+              opacity: syncDisabled ? 0.5 : 1,
+              cursor: syncDisabled ? "not-allowed" : "pointer",
+              boxShadow: "0 6px 16px color-mix(in srgb, var(--accent) 40%, transparent)",
+            }}
+          >
+            <Search size={15} className={isSyncing ? "anim-spin" : undefined} style={{ flexShrink: 0 }} />
+            <span style={label}>检索新作</span>
+          </button>
+        </div>
       </div>
 
       <LastUpdated syncedAt={syncedAt} />

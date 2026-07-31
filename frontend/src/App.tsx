@@ -222,6 +222,7 @@ export function App() {
         showPreview={showPreview}
         onShowPreviewChange={handleShowPreviewChange}
         onDownloadStatusUpdated={refetchMangas}
+        onRecentUpdatesCleared={refetchUpdates}
       />
     </div>
   )

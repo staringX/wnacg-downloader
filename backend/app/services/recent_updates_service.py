@@ -1,4 +1,5 @@
 """最近更新业务服务"""
+import re
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from typing import List
@@ -14,6 +15,30 @@ from app.services.sync_service import _record_synced_at
 
 # 詳細ページの「分類」欄がこれらの文字列を含む作品のみ「漢化」とみなす（簡体・繁体両対応）
 HANHUA_MARKERS = ("漢化", "汉化")
+
+# タイトルを作者名候補に切り分ける区切り文字（半角・全角の []（） ）
+_TITLE_SPLIT_RE = re.compile(r"[\[\]\(\)［］（）]")
+
+
+def split_title_tokens(title: str) -> List[str]:
+    """タイトルを [ ] ( ) で切り分け、前後の空白を除いた非空トークンを返す
+
+    例: "(C97) [サークル (作者名)] タイトル [中国翻訳]"
+        → ["C97", "サークル", "作者名", "タイトル", "中国翻訳"]
+    """
+    return [t.strip() for t in _TITLE_SPLIT_RE.split(title or "") if t.strip()]
+
+
+def title_matches_author(title: str, author: str) -> bool:
+    """タイトル中の [ ] ( ) 区切りトークンのいずれかが作者名と完全一致するか
+
+    検索は部分一致でヒットするため、同名を含む別作者の作品が混入する。
+    トークン完全一致しない作品は「別の作者」とみなし保存対象外にする。
+    """
+    author = (author or "").strip()
+    if not author:
+        return False
+    return author in split_title_tokens(title)
 
 
 def _is_hanhua(crawler, manga_url: str) -> bool:
@@ -130,6 +155,22 @@ class RecentUpdatesService:
                         continue
 
                     logger.info(f"  作者 {author} 找到 {len(new_mangas)} 个新更新")
+
+                    # 作者名フィルタ：タイトルを [ ] ( ) で切り分けたトークンに
+                    # 作者名と完全一致するものが無い作品は「別の作者」として除外する。
+                    # （漢化判定より前に実施し、無駄な詳細ページ取得を避ける）
+                    before = len(new_mangas)
+                    kept = []
+                    for md in new_mangas:
+                        if title_matches_author(md.get("title", ""), author):
+                            kept.append(md)
+                        else:
+                            logger.info(
+                                f"    作者名不一致，跳过: {md.get('title', 'Unknown')[:60]}")
+                    new_mangas = kept
+                    logger.info(f"  作者 {author} 作者名过滤: {before} → {len(new_mangas)}")
+                    if not new_mangas:
+                        continue
 
                     # 「漢化」フィルタ：詳細ページの分類欄で判定し、漢化作品のみ残す
                     if hanhua_only:
