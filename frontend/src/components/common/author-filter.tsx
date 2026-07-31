@@ -5,11 +5,13 @@ interface AuthorFilterProps {
   authors: string[]
   selected: Set<string>
   onChange: (next: Set<string>) => void
+  // モバイルの 1 行レイアウト用：親の flex 行で幅を分け合う細身のボタンにする
+  compact?: boolean
 }
 
 // 作者マルチ選択フィルタ（作者検索付きのポップオーバー）
 // 収藏夹・最近更新の両画面で共用する。
-export function AuthorFilter({ authors, selected, onChange }: AuthorFilterProps) {
+export function AuthorFilter({ authors, selected, onChange, compact = false }: AuthorFilterProps) {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState("")
 
@@ -29,29 +31,34 @@ export function AuthorFilter({ authors, selected, onChange }: AuthorFilterProps)
   const active = selected.size > 0
 
   return (
-    <div style={{ position: "relative" }}>
+    <div style={{ position: "relative", ...(compact ? { flex: "1 1 auto", minWidth: 0 } : null) }}>
       <button
         onClick={() => setOpen((o) => !o)}
         style={{
-          display: "inline-flex",
+          display: compact ? "flex" : "inline-flex",
           alignItems: "center",
-          gap: 7,
-          height: 40,
-          padding: "0 14px",
-          borderRadius: 11,
-          fontSize: 13.5,
+          justifyContent: "center",
+          gap: compact ? 5 : 7,
+          width: compact ? "100%" : undefined,
+          height: compact ? 36 : 40,
+          padding: compact ? "0 8px" : "0 14px",
+          borderRadius: compact ? 10 : 11,
+          fontSize: compact ? 12.5 : 13.5,
           fontWeight: 500,
+          whiteSpace: "nowrap",
+          overflow: "hidden",
           border: `1px solid ${active ? "var(--accent)" : "var(--border)"}`,
           background: active ? "var(--accent-soft)" : "var(--surface)",
           color: active ? "var(--accent)" : "var(--text)",
         }}
       >
-        <Users size={16} />
-        作者筛选
+        <Users size={compact ? 15 : 16} style={{ flexShrink: 0 }} />
+        <span style={{ overflow: "hidden", textOverflow: "ellipsis", minWidth: 0 }}>作者筛选</span>
         {active && (
           <span
             className="tabular"
             style={{
+              flexShrink: 0,
               fontSize: 11,
               fontWeight: 700,
               padding: "1px 6px",
@@ -75,7 +82,7 @@ export function AuthorFilter({ authors, selected, onChange }: AuthorFilterProps)
             className="anim-popin"
             style={{
               position: "absolute",
-              top: 46,
+              top: compact ? 42 : 46,
               left: 0,
               zIndex: 46,
               width: 260,
