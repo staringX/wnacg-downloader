@@ -89,6 +89,11 @@ DL 済み漫画の CBZ 実在を検証し、欠損は状態リセット。
 最近更新を更新日降順で取得。
 - 200: `MangaResponse[]`（`recent_updates` テーブル由来）
 
+### `DELETE /api/recent-updates`
+最近更新を全件削除（設定 → データメンテナンス）。収藏夹・ローカル CBZ は不変。
+- 200: `{success, deleted_count, message}`
+- 409: 更新タスク実行中。
+
 ### `POST /api/sync-recent-updates`
 最近更新同期タスクを作成（シングルトン）。
 - 200: `TaskCreateResponse`

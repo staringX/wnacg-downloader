@@ -23,6 +23,23 @@ def get_recent_updates(db: Session = Depends(get_db)):
     return [MangaResponse.from_orm(update) for update in recent_updates]
 
 
+@router.delete("/recent-updates")
+def clear_recent_updates(db: Session = Depends(get_db)):
+    """清空最近更新列表（设置 → 数据维护）
+
+    RecentUpdate 表のみを全削除する。収藏夹（Manga 表）や既存の CBZ には触れない。
+    次回の「检索新作」で作者ごとの最新日時から作り直される。
+    """
+    # 同期中の削除は再構築処理と競合するため拒否
+    if is_any_sync_running():
+        raise HTTPException(status_code=409, detail="更新进行中，无法清空最近更新")
+
+    deleted = db.query(RecentUpdate).delete()
+    db.commit()
+    logger.info(f"清空最近更新：删除 {deleted} 条")
+    return {"success": True, "deleted_count": deleted, "message": f"已清空 {deleted} 条最近更新"}
+
+
 @router.post("/sync-recent-updates", response_model=TaskCreateResponse)
 def sync_recent_updates(background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     """

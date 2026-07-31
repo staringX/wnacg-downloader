@@ -8,6 +8,15 @@ export const recentUpdatesApi = {
     return apiClient.get<RecentUpdate[]>("/api/recent-updates")
   },
 
+  // 清空最近更新列表（设置 → 数据维护）
+  async clearRecentUpdates(): Promise<
+    ApiResponse<{ success: boolean; deleted_count: number; message: string }>
+  > {
+    return apiClient.delete<{ success: boolean; deleted_count: number; message: string }>(
+      "/api/recent-updates"
+    )
+  },
+
   // 从最近更新下载漫画（会先添加到Manga表，标记为is_favorited=false）
   async downloadFromUpdate(updateId: string): Promise<ApiResponse<{ task_id: string; message: string }>> {
     return apiClient.post<{ task_id: string; message: string }>(`/api/download-from-update/${updateId}`)

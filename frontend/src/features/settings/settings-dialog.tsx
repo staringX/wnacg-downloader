@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react"
 import * as Dialog from "@radix-ui/react-dialog"
-import { Settings as SettingsIcon, X, Loader2, FileCheck } from "lucide-react"
-import { settingsApi, syncApi } from "@/lib/api"
+import { Settings as SettingsIcon, X, Loader2, FileCheck, Trash2 } from "lucide-react"
+import { settingsApi, syncApi, recentUpdatesApi } from "@/lib/api"
 import type { AppConfig } from "@/lib/api"
 import { Switch } from "@/components/common/switch"
 import { useToast } from "@/components/common/toast-context"
@@ -14,6 +14,7 @@ interface SettingsDialogProps {
   showPreview: boolean
   onShowPreviewChange: (v: boolean) => void
   onDownloadStatusUpdated: () => void
+  onRecentUpdatesCleared: () => void
 }
 
 // DESIGN_SPEC §6.10 设置对话框（+ §4.1 数据维护）
@@ -25,17 +26,22 @@ export function SettingsDialog({
   showPreview,
   onShowPreviewChange,
   onDownloadStatusUpdated,
+  onRecentUpdatesCleared,
 }: SettingsDialogProps) {
   const { toast } = useToast()
   const [url, setUrl] = useState(config.manual_manga_site_url ?? "")
   const [hanhuaOnly, setHanhuaOnly] = useState(config.recent_updates_hanhua_only)
   const [saving, setSaving] = useState(false)
   const [updating, setUpdating] = useState(false)
+  // 清空最近更新は破壊的操作なので 2 段階（1回目で確認表示 → 2回目で実行）
+  const [confirmClear, setConfirmClear] = useState(false)
+  const [clearing, setClearing] = useState(false)
 
   useEffect(() => {
     if (open) {
       setUrl(config.manual_manga_site_url ?? "")
       setHanhuaOnly(config.recent_updates_hanhua_only)
+      setConfirmClear(false)
     }
   }, [open, config])
 
@@ -70,6 +76,26 @@ export function SettingsDialog({
       }
     } finally {
       setUpdating(false)
+    }
+  }
+
+  const handleClearRecentUpdates = async () => {
+    if (!confirmClear) {
+      setConfirmClear(true)
+      return
+    }
+    setClearing(true)
+    try {
+      const res = await recentUpdatesApi.clearRecentUpdates()
+      if (res.success && res.data) {
+        toast(res.data.message || "已清空最近更新")
+        onRecentUpdatesCleared()
+      } else {
+        toast(res.error || "清空失败")
+      }
+    } finally {
+      setClearing(false)
+      setConfirmClear(false)
     }
   }
 
@@ -243,6 +269,42 @@ export function SettingsDialog({
                   >
                     {updating ? <Loader2 size={15} className="anim-spin" /> : <FileCheck size={15} />}
                     {updating ? "扫描中…" : "更新"}
+                  </button>
+                </div>
+
+                <div style={{ height: 1, background: "var(--border)" }} />
+
+                {/* 清空最近更新 */}
+                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 13.5, fontWeight: 500 }}>清空最近更新</div>
+                    <div style={{ fontSize: 11, color: "var(--text2)", marginTop: 2 }}>
+                      {confirmClear
+                        ? "再次点击确认删除。已下载的文件与收藏夹不受影响。"
+                        : "删除全部最近更新记录，下次检索新作时重新生成。"}
+                    </div>
+                  </div>
+                  <button
+                    onClick={handleClearRecentUpdates}
+                    onBlur={() => setConfirmClear(false)}
+                    disabled={clearing}
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 6,
+                      height: 36,
+                      padding: "0 13px",
+                      borderRadius: 9,
+                      border: `1px solid ${confirmClear ? "var(--danger)" : "var(--border)"}`,
+                      background: confirmClear ? "var(--danger)" : "var(--surface)",
+                      color: confirmClear ? "#fff" : "var(--danger)",
+                      fontSize: 13,
+                      fontWeight: 500,
+                      flexShrink: 0,
+                    }}
+                  >
+                    {clearing ? <Loader2 size={15} className="anim-spin" /> : <Trash2 size={15} />}
+                    {clearing ? "清空中…" : confirmClear ? "确认清空" : "清空"}
                   </button>
                 </div>
               </div>
