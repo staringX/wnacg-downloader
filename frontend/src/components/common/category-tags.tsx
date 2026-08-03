@@ -17,7 +17,7 @@ export function CategoryTags({ tags, style }: CategoryTagsProps) {
             padding: "2px 7px",
             borderRadius: 6,
             background: "var(--accent-soft)",
-            color: "var(--accent)",
+            color: "var(--accent-strong)",
             border: "1px solid color-mix(in srgb, var(--accent) 25%, transparent)",
             whiteSpace: "nowrap",
           }}

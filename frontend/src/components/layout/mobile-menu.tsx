@@ -1,3 +1,4 @@
+import { useEffect } from "react"
 import { Library, Clock, ExternalLink, Sun, Moon, Settings } from "lucide-react"
 import { useTheme } from "@/components/common/theme-context"
 import { openKomga } from "@/lib/komga"
@@ -36,6 +37,17 @@ export function MobileMenu({
   onOpenSettings,
 }: MobileMenuProps) {
   const { theme, toggleTheme } = useTheme()
+
+  // Esc で閉じられるようにする（モーダル的な要素の基本操作）
+  useEffect(() => {
+    if (!open) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose()
+    }
+    window.addEventListener("keydown", onKey)
+    return () => window.removeEventListener("keydown", onKey)
+  }, [open, onClose])
+
   if (!open) return null
 
   const tab = (key: TabKey, label: string, Icon: typeof Library, count?: number) => {
@@ -45,7 +57,7 @@ export function MobileMenu({
         style={{
           ...itemStyle,
           background: active ? "color-mix(in srgb, var(--accent) 16%, transparent)" : "transparent",
-          color: active ? "var(--accent)" : "var(--text)",
+          color: active ? "var(--accent-strong)" : "var(--text)",
           fontWeight: active ? 600 : 400,
         }}
         onClick={() => {
@@ -63,7 +75,7 @@ export function MobileMenu({
               fontWeight: 700,
               padding: "1px 6px",
               borderRadius: 20,
-              background: active ? "var(--accent)" : "var(--surface2)",
+              background: active ? "var(--accent-solid)" : "var(--surface2)",
               color: active ? "#fff" : "var(--text2)",
             }}
           >

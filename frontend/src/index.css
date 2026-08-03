@@ -43,6 +43,15 @@ button {
   cursor: pointer;
 }
 
+/* キーボード操作時のフォーカスリング。
+   多くのボタンが border:none / 独自背景のため、UA 既定のリングでは
+   暗色面で視認しづらい。マウス操作時は出さない（:focus-visible）。 */
+:where(button, a, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--accent-strong);
+  outline-offset: 2px;
+  border-radius: inherit;
+}
+
 input,
 select,
 textarea {
@@ -142,4 +151,38 @@ a {
 }
 .anim-popin {
   animation: popIn 0.2s ease;
+}
+
+/* モバイルではタップ領域を広げる（指はポインタより太い）。
+   カード/行の操作ボタンに付与する。820px は use-mobile.ts の閾値と同じ。 */
+@media (max-width: 819px) {
+  .touch-btn {
+    min-height: 40px;
+  }
+  .touch-icon-btn {
+    width: 40px !important;
+    height: 40px !important;
+  }
+}
+
+/* iOS のホームインジケータ/ノッチ回避（下端固定要素用） */
+.safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* OS で「視差効果を減らす」を有効にしている利用者向け。
+   ローディングの回転だけは「処理中」を伝える唯一の手がかりなので
+   完全停止させず、ゆっくり回す。 */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  .anim-spin {
+    animation: spin 2.4s linear infinite !important;
+  }
 }

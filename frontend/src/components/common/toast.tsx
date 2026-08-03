@@ -14,7 +14,8 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     setMessage(msg)
     setVisibleKey((k) => k + 1)
     if (timerRef.current) clearTimeout(timerRef.current)
-    timerRef.current = setTimeout(() => setMessage(null), 2200)
+    // 3s：2.2s は長めのメッセージだと読み切れないことがあるため（推奨 3〜5s）
+    timerRef.current = setTimeout(() => setMessage(null), 3000)
   }, [])
 
   return (
@@ -23,11 +24,15 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       {message && (
         <div
           key={visibleKey}
+          // 操作結果はスクリーンリーダーにも伝える（フォーカスは奪わない）
+          role="status"
+          aria-live="polite"
           style={{
             position: "fixed",
             left: "50%",
             transform: "translateX(-50%)",
-            bottom: isMobile ? 92 : 28,
+            // iOS のホームインジケータ分を足して隠れないようにする
+            bottom: `calc(${isMobile ? 92 : 28}px + env(safe-area-inset-bottom, 0px))`,
             zIndex: 70,
             padding: "11px 20px",
             borderRadius: 12,

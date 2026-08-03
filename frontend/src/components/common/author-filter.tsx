@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { Users, Search, Check, X } from "lucide-react"
 
 interface AuthorFilterProps {
@@ -14,6 +14,19 @@ interface AuthorFilterProps {
 export function AuthorFilter({ authors, selected, onChange, compact = false }: AuthorFilterProps) {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState("")
+  const triggerRef = useRef<HTMLButtonElement>(null)
+
+  // Esc で閉じ、フォーカスを開いたボタンへ戻す（キーボード操作の迷子防止）
+  useEffect(() => {
+    if (!open) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return
+      setOpen(false)
+      triggerRef.current?.focus()
+    }
+    window.addEventListener("keydown", onKey)
+    return () => window.removeEventListener("keydown", onKey)
+  }, [open])
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -33,7 +46,10 @@ export function AuthorFilter({ authors, selected, onChange, compact = false }: A
   return (
     <div style={{ position: "relative", ...(compact ? { flex: "1 1 auto", minWidth: 0 } : null) }}>
       <button
+        ref={triggerRef}
         onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        aria-haspopup="dialog"
         style={{
           display: compact ? "flex" : "inline-flex",
           alignItems: "center",
@@ -49,7 +65,7 @@ export function AuthorFilter({ authors, selected, onChange, compact = false }: A
           overflow: "hidden",
           border: `1px solid ${active ? "var(--accent)" : "var(--border)"}`,
           background: active ? "var(--accent-soft)" : "var(--surface)",
-          color: active ? "var(--accent)" : "var(--text)",
+          color: active ? "var(--accent-strong)" : "var(--text)",
         }}
       >
         <Users size={compact ? 15 : 16} style={{ flexShrink: 0 }} />
@@ -63,7 +79,7 @@ export function AuthorFilter({ authors, selected, onChange, compact = false }: A
               fontWeight: 700,
               padding: "1px 6px",
               borderRadius: 20,
-              background: "var(--accent)",
+              background: "var(--accent-solid)",
               color: "#fff",
             }}
           >
@@ -124,7 +140,6 @@ export function AuthorFilter({ authors, selected, onChange, compact = false }: A
                   background: "var(--surface2)",
                   color: "var(--text)",
                   fontSize: 13,
-                  outline: "none",
                 }}
               />
               {active && (
@@ -187,7 +202,7 @@ export function AuthorFilter({ authors, selected, onChange, compact = false }: A
                           borderRadius: 5,
                           flexShrink: 0,
                           border: `1.5px solid ${checked ? "var(--accent)" : "var(--border)"}`,
-                          background: checked ? "var(--accent)" : "transparent",
+                          background: checked ? "var(--accent-solid)" : "transparent",
                           display: "inline-flex",
                           alignItems: "center",
                           justifyContent: "center",

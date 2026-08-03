@@ -33,7 +33,7 @@ export function SyncingNotice({ text }: { text: string }) {
         padding: "8px 12px",
         borderRadius: 10,
         fontSize: 12.5,
-        color: "var(--accent)",
+        color: "var(--accent-strong)",
         background: "var(--accent-soft)",
         border: "1px solid color-mix(in srgb, var(--accent) 30%, var(--border))",
       }}

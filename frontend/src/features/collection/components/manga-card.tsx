@@ -21,9 +21,9 @@ interface MangaCardProps {
 }
 
 const STATUS_BADGE: Record<MangaStatus, { label: string; color: string }> = {
-  downloaded: { label: "已下载", color: "var(--state-downloaded)" },
-  downloading: { label: "下载中", color: "var(--state-downloading)" },
-  pending: { label: "待下载", color: "var(--accent)" },
+  downloaded: { label: "已下载", color: "var(--state-downloaded-solid)" },
+  downloading: { label: "下载中", color: "var(--state-downloading-solid)" },
+  pending: { label: "待下载", color: "var(--accent-solid)" },
 }
 
 // DESIGN_SPEC §6.7 漫画卡片（卡片视图）
@@ -118,7 +118,7 @@ export function MangaCard({
                 height: 24,
                 borderRadius: 7,
                 border: "1.5px solid #fff",
-                background: selected ? "var(--accent)" : "rgba(0,0,0,.5)",
+                background: selected ? "var(--accent-solid)" : "rgba(0,0,0,.5)",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
@@ -239,7 +239,7 @@ export function MangaCard({
                   flexShrink: 0,
                   borderRadius: 7,
                   border: `1.5px solid ${selected ? "var(--accent)" : "var(--border)"}`,
-                  background: selected ? "var(--accent)" : "transparent",
+                  background: selected ? "var(--accent-solid)" : "transparent",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
@@ -302,10 +302,12 @@ export function MangaCard({
           <button
             onClick={stop(onOpenOriginal)}
             title="在原站点打开"
+            aria-label={`在原站点打开：${manga.title}`}
+            className="touch-icon-btn"
             style={ghostIconBtn}
             onMouseEnter={(e) => {
               e.currentTarget.style.borderColor = "var(--accent)"
-              e.currentTarget.style.color = "var(--accent)"
+              e.currentTarget.style.color = "var(--accent-strong)"
             }}
             onMouseLeave={(e) => {
               e.currentTarget.style.borderColor = "var(--border)"
@@ -317,10 +319,12 @@ export function MangaCard({
           <button
             onClick={stop(onDelete)}
             title="删除"
+            aria-label={`删除：${manga.title}`}
+            className="touch-icon-btn"
             style={ghostIconBtn}
             onMouseEnter={(e) => {
               e.currentTarget.style.borderColor = "var(--danger)"
-              e.currentTarget.style.color = "var(--danger)"
+              e.currentTarget.style.color = "var(--danger-strong)"
             }}
             onMouseLeave={(e) => {
               e.currentTarget.style.borderColor = "var(--border)"
@@ -380,7 +384,7 @@ function MainButton({
           ...base,
           cursor: "default",
           background: "color-mix(in srgb, #22c55e 14%, var(--surface2))",
-          color: "var(--state-downloaded)",
+          color: "var(--success-strong)",
         }}
       >
         <Check size={15} />
@@ -402,6 +406,7 @@ function MainButton({
     <button
       onClick={onDownload}
       disabled={downloadDisabled}
+      className="touch-btn"
       title={downloadDisabled ? "更新进行中，暂不可下载" : undefined}
       style={{
         ...base,

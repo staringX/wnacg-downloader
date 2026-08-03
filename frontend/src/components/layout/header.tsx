@@ -40,6 +40,7 @@ export function Header({
     return (
       <button
         onClick={() => onTabChange(key)}
+        aria-current={active ? "page" : undefined}
         style={{
           height: 38,
           padding: "0 15px",
@@ -49,7 +50,7 @@ export function Header({
           alignItems: "center",
           gap: 7,
           background: active ? "color-mix(in srgb, var(--accent) 16%, transparent)" : "transparent",
-          color: active ? "var(--accent)" : "var(--text2)",
+          color: active ? "var(--accent-strong)" : "var(--text2)",
           fontSize: 14,
           fontWeight: active ? 600 : 500,
         }}
@@ -64,7 +65,7 @@ export function Header({
               fontWeight: 700,
               padding: "1px 6px",
               borderRadius: 20,
-              background: active ? "var(--accent)" : "var(--surface2)",
+              background: active ? "var(--accent-solid)" : "var(--surface2)",
               color: active ? "#fff" : "var(--text2)",
             }}
           >

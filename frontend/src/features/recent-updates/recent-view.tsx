@@ -111,7 +111,7 @@ export function RecentView(props: RecentViewProps) {
           border: "1px solid color-mix(in srgb, var(--accent) 30%, var(--border))",
         }}
       >
-        <Zap size={20} style={{ color: "var(--accent)", flexShrink: 0 }} />
+        <Zap size={20} style={{ color: "var(--accent-strong)", flexShrink: 0 }} />
         <div style={{ flex: "1 1 200px", minWidth: 0 }}>
           <div style={{ fontSize: 14, fontWeight: 600 }}>关注作者的新作品</div>
           <div style={{ fontSize: 12, color: "var(--text2)", marginTop: 2 }}>
@@ -141,7 +141,7 @@ export function RecentView(props: RecentViewProps) {
               ...actionBtn,
               border: `1px solid ${group ? "var(--accent)" : "var(--border)"}`,
               background: group ? "var(--accent-soft)" : "var(--surface)",
-              color: group ? "var(--accent)" : "var(--text)",
+              color: group ? "var(--accent-strong)" : "var(--text)",
             }}
           >
             <Users size={15} style={{ flexShrink: 0 }} />
