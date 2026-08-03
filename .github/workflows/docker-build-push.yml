@@ -57,6 +57,7 @@ jobs:
               VERSION=${VERSION#v}
               echo "✅ 使用Git tag作为版本号: $VERSION"
               echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+              echo "BUMPED=false" >> $GITHUB_OUTPUT
               echo "最终版本号: $VERSION"
               exit 0
             fi
@@ -86,30 +87,35 @@ jobs:
           VERSION="$MAJOR.$MINOR.$PATCH"
           echo "$VERSION" > VERSION
           echo "✅ 自动递增补丁版本: $CURRENT_VERSION -> $VERSION"
-          
-          # 提交VERSION文件变更
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add VERSION
-          if git diff --staged --quiet; then
-            echo "ℹ️  VERSION文件无变更，跳过提交"
-          else
-            git commit -m "chore: auto bump version to $VERSION [skip ci]" || true
-            # 使用GITHUB_TOKEN推送，避免触发新的workflow（因为有[skip ci]标记）
-            git push origin HEAD:${{ github.ref_name }} || echo "⚠️  推送VERSION文件失败，继续构建"
-          fi
-          
+
+          # VERSION文件的提交推迟到镜像推送成功之后（见最后的步骤）。
+          # 构建失败时版本号だけが進んで実体のない版本が残るのを防ぐ。
           echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+          echo "BUMPED=true" >> $GITHUB_OUTPUT
           echo "最终版本号: $VERSION"
 
-      - name: 设置 Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
+      # Buildx のブートは moby/buildkit を Docker Hub から取得するため、
+      # 先にログインして認証済み pull にする（匿名 pull は制限・不調を受けやすい）。
       - name: 登录 Docker Hub
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_TOKEN }}
+
+      - name: 设置 Docker Buildx
+        id: buildx
+        continue-on-error: true
+        uses: docker/setup-buildx-action@v3
+
+      # 一時的なネットワーク不調で buildkit の pull が失敗することがあるため、
+      # 失敗時だけ 20 秒待って一度やり直す。
+      - name: 设置 Docker Buildx（重试）
+        if: steps.buildx.outcome == 'failure'
+        run: sleep 20
+
+      - name: 设置 Docker Buildx（第二次尝试）
+        if: steps.buildx.outcome == 'failure'
+        uses: docker/setup-buildx-action@v3
 
       # 方案B：后端镜像（多阶段构建）已内含前端静态资源，单镜像配信前端 + API
       - name: 构建并推送后端镜像（含前端）
@@ -124,6 +130,22 @@ jobs:
           platforms: linux/amd64
           cache-from: type=registry,ref=${{ env.DOCKER_REGISTRY }}/${{ env.BACKEND_IMAGE }}:buildcache
           cache-to: type=registry,ref=${{ env.DOCKER_REGISTRY }}/${{ env.BACKEND_IMAGE }}:buildcache,mode=max
+
+      # 镜像推送成功后にだけ VERSION を確定させる。
+      # 途中で失敗した場合は VERSION が進まないので、次回の実行が同じ版本号で再試行できる。
+      - name: 提交 VERSION 文件
+        if: steps.version.outputs.BUMPED == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add VERSION
+          if git diff --staged --quiet; then
+            echo "ℹ️  VERSION文件无变更，跳过提交"
+          else
+            git commit -m "chore: auto bump version to ${{ steps.version.outputs.VERSION }} [skip ci]" || true
+            # 使用GITHUB_TOKEN推送，避免触发新的workflow（因为有[skip ci]标记）
+            git push origin HEAD:${{ github.ref_name }} || echo "⚠️  推送VERSION文件失败"
+          fi
 
       - name: 输出镜像信息
         run: |
