@@ -20,9 +20,9 @@ interface MangaRowProps {
 }
 
 const STATUS_LABEL: Record<MangaStatus, { label: string; color: string }> = {
-  downloaded: { label: "已下载", color: "var(--state-downloaded)" },
+  downloaded: { label: "已下载", color: "var(--success-strong)" },
   downloading: { label: "下载中", color: "var(--state-downloading)" },
-  pending: { label: "待下载", color: "var(--accent)" },
+  pending: { label: "待下载", color: "var(--accent-strong)" },
 }
 
 // DESIGN_SPEC §6.8 漫画行（列表视图）
@@ -81,7 +81,7 @@ export function MangaRow({
             flexShrink: 0,
             borderRadius: 6,
             border: "1.5px solid " + (selected ? "var(--accent)" : "var(--border)"),
-            background: selected ? "var(--accent)" : "transparent",
+            background: selected ? "var(--accent-solid)" : "transparent",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
@@ -158,6 +158,8 @@ export function MangaRow({
         <button
           onClick={stop(onDownload)}
           disabled={downloadDisabled}
+          className="touch-btn"
+          aria-label={`下载：${manga.title}`}
           title={downloadDisabled ? "更新进行中，暂不可下载" : undefined}
           style={{
             flexShrink: 0,
@@ -178,10 +180,22 @@ export function MangaRow({
       )}
 
       {/* 外链 / 删除 */}
-      <button onClick={stop(onOpenOriginal)} title="在原站点打开" style={rowIconBtn}>
+      <button
+        onClick={stop(onOpenOriginal)}
+        title="在原站点打开"
+        aria-label={`在原站点打开：${manga.title}`}
+        className="touch-icon-btn"
+        style={rowIconBtn}
+      >
         <ExternalLink size={15} />
       </button>
-      <button onClick={stop(onDelete)} title="删除" style={rowIconBtn}>
+      <button
+        onClick={stop(onDelete)}
+        title="删除"
+        aria-label={`删除：${manga.title}`}
+        className="touch-icon-btn"
+        style={rowIconBtn}
+      >
         <Trash2 size={15} />
       </button>
     </div>

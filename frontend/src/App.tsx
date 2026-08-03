@@ -210,8 +210,14 @@ export function App() {
         )}
       </main>
 
+      {/* FAB は「今見ているタブ」を更新する（収藏夹＝同期／最近更新＝检索新作） */}
       {isMobile && (
-        <SyncFab onSync={syncCollection} syncing={isCollectionSyncing || isRecentSyncing} />
+        <SyncFab
+          onSync={tab === "collection" ? syncCollection : syncRecent}
+          syncing={tab === "collection" ? isCollectionSyncing : isRecentSyncing}
+          disabled={syncDisabled}
+          label={tab === "collection" ? "同步收藏夹" : "检索新作"}
+        />
       )}
 
       <SettingsDialog

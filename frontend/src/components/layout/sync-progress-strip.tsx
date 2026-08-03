@@ -27,9 +27,14 @@ export function SyncProgressStrip({ strip }: { strip: SyncStrip }) {
           gap: 12,
         }}
       >
-        <Loader2 size={15} className="anim-spin" style={{ color: "var(--accent)", flexShrink: 0 }} />
+        <Loader2 size={15} className="anim-spin" style={{ color: "var(--accent-strong)", flexShrink: 0 }} />
         <span style={{ fontSize: 12.5, fontWeight: 500, whiteSpace: "nowrap" }}>{strip.label}</span>
         <div
+          role="progressbar"
+          aria-label={strip.label}
+          aria-valuenow={pct}
+          aria-valuemin={0}
+          aria-valuemax={100}
           style={{
             flex: 1,
             height: 5,

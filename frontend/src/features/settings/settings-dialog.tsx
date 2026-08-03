@@ -140,7 +140,7 @@ export function SettingsDialog({
                 borderBottom: "1px solid var(--border)",
               }}
             >
-              <SettingsIcon size={18} style={{ color: "var(--accent)" }} />
+              <SettingsIcon size={18} style={{ color: "var(--accent-strong)" }} />
               <Dialog.Title style={{ fontSize: 16, fontWeight: 700, margin: 0, flex: 1 }}>
                 设置
               </Dialog.Title>
@@ -182,7 +182,6 @@ export function SettingsDialog({
                     background: "var(--surface2)",
                     color: "var(--text)",
                     fontSize: 13.5,
-                    outline: "none",
                   }}
                 />
                 <p style={{ fontSize: 11, color: "var(--text2)", marginTop: 6, lineHeight: 1.5 }}>
@@ -207,7 +206,7 @@ export function SettingsDialog({
                     关闭后使用渐变占位，减少图片请求。
                   </div>
                 </div>
-                <Switch checked={showPreview} onChange={onShowPreviewChange} />
+                <Switch checked={showPreview} onChange={onShowPreviewChange} label="显示封面预览" />
               </div>
 
               {/* 仅获取「汉化」作品 */}
@@ -227,7 +226,7 @@ export function SettingsDialog({
                     检索新作时，仅保留详情「分类」含「漢化」的作品。关闭则获取全部。
                   </div>
                 </div>
-                <Switch checked={hanhuaOnly} onChange={setHanhuaOnly} />
+                <Switch checked={hanhuaOnly} onChange={setHanhuaOnly} label="最近更新仅获取「汉化」作品" />
               </div>
 
               {/* §4.1 数据维护 */}
@@ -295,9 +294,9 @@ export function SettingsDialog({
                       height: 36,
                       padding: "0 13px",
                       borderRadius: 9,
-                      border: `1px solid ${confirmClear ? "var(--danger)" : "var(--border)"}`,
-                      background: confirmClear ? "var(--danger)" : "var(--surface)",
-                      color: confirmClear ? "#fff" : "var(--danger)",
+                      border: `1px solid ${confirmClear ? "var(--danger-solid)" : "var(--border)"}`,
+                      background: confirmClear ? "var(--danger-solid)" : "var(--surface)",
+                      color: confirmClear ? "#fff" : "var(--danger-strong)",
                       fontSize: 13,
                       fontWeight: 500,
                       flexShrink: 0,

@@ -12,6 +12,12 @@
   --border: #262636;
   --text: #f0f0f5;
   --text2: #9a9ab0;
+
+  /* 文字/图标用の状態色（背景の上で AA 4.5:1 以上）
+     --accent 等の「素の色」は装飾（枠線・光彩・非文字要素）専用。 */
+  --accent-strong: #f2609f; /* surface 6.04 / accent-soft 5.20 */
+  --danger-strong: #f26565; /* surface 5.93 / danger-soft 5.15 */
+  --success-strong: #22c55e; /* green-soft 5.80 */
 }
 
 [data-theme="light"] {
@@ -21,11 +27,16 @@
   --surface2: #f0f0f4;
   --border: #e4e4ec;
   --text: #16161d;
-  --text2: #71718a;
+  /* #71718a は surface2/bg 上で 4.17〜4.32 と AA 未達だったため濃くした */
+  --text2: #65657c; /* white 5.67 / surface2 4.99 / bg 5.17 */
+
+  --accent-strong: #c81e67; /* white 5.47 / accent-soft 4.59 */
+  --danger-strong: #c81e1e; /* white 5.74 / danger-soft 4.79 */
+  --success-strong: #12703a; /* green-soft 4.88 / white 6.17 */
 }
 
 :root {
-  /* §1.3 强调色 / 状态色（主题通用） */
+  /* §1.3 强调色 / 状态色（主题通用・装飾用の素の色） */
   --accent: #ec4899;
   --accent2: color-mix(in srgb, var(--accent), white 22%);
   --state-downloaded: #22c55e; /* 已下载（绿） */
@@ -33,8 +44,15 @@
   --state-pending: var(--accent); /* 待下载 */
   --danger: #ef4444;
 
-  /* 主渐变 */
-  --gradient: linear-gradient(135deg, var(--accent), var(--accent2));
+  /* 白文字を載せる面（バッジ・実塗りボタン）。いずれも #fff で AA 4.5:1 以上。
+     素の --accent / --danger / --state-* は白文字だと 2.3〜3.8 で AA 未達。 */
+  --accent-solid: #be185d; /* #fff 6.04 */
+  --danger-solid: #c81e1e; /* #fff 5.74 */
+  --state-downloaded-solid: #15803d; /* #fff 5.02 */
+  --state-downloading-solid: #2563eb; /* #fff 5.17 */
+
+  /* 主渐变（白文字前提のため濃いピンクのランプ。両端とも #fff で 4.9 以上） */
+  --gradient: linear-gradient(135deg, var(--accent-solid), #c73874);
 
   /* §1.5 半透明 / 特殊 */
   --header-bg: color-mix(in srgb, var(--surface) 88%, transparent);

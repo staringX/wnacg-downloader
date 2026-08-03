@@ -17,8 +17,8 @@ interface CardDef {
 export function StatCards({ total, downloaded, pending }: StatCardsProps) {
   const cards: CardDef[] = [
     { label: "总计", value: total, color: "var(--text)", Icon: Library },
-    { label: "已下载", value: downloaded, color: "var(--state-downloaded)", Icon: CheckCircle2 },
-    { label: "待下载", value: pending, color: "var(--accent)", Icon: Download },
+    { label: "已下载", value: downloaded, color: "var(--success-strong)", Icon: CheckCircle2 },
+    { label: "待下载", value: pending, color: "var(--accent-strong)", Icon: Download },
   ]
 
   return (

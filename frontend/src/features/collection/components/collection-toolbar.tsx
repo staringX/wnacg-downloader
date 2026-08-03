@@ -43,7 +43,7 @@ function activeToggleStyle(on: boolean): React.CSSProperties {
         ...toolBtn,
         border: "1px solid var(--accent)",
         background: "var(--accent-soft)",
-        color: "var(--accent)",
+        color: "var(--accent-strong)",
       }
     : toolBtn
 }
@@ -121,7 +121,6 @@ export function CollectionToolbar(props: ToolbarProps) {
             background: "var(--surface)",
             color: "var(--text)",
             fontSize: 13.5,
-            outline: "none",
           }}
           onFocus={(e) => (e.currentTarget.style.borderColor = "var(--accent)")}
           onBlur={(e) => (e.currentTarget.style.borderColor = "var(--border)")}

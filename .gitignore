@@ -41,6 +41,8 @@ Thumbs.db
 .vscode/
 .idea/
 .cursor/
+# Claude Code のスキル（ローカル専用・リポジトリでは共有しない）
+.claude/skills/
 *.sublime-project
 *.sublime-workspace
 *.code-workspace

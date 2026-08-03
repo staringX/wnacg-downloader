@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { Heart, FileText, Calendar, Loader2 } from "lucide-react"
+import { Heart, FileText, Calendar, Loader2, ExternalLink } from "lucide-react"
 import type { RecentUpdate } from "@/lib/types"
 import { coverGradClass, formatDate } from "@/lib/format"
 
@@ -83,7 +83,7 @@ export function RecentUpdateCard({
             left: 6,
             padding: "2px 6px",
             borderRadius: 6,
-            background: "var(--accent)",
+            background: "var(--accent-solid)",
             color: "#fff",
             fontSize: 9.5,
             fontWeight: 700,
@@ -140,6 +140,9 @@ export function RecentUpdateCard({
           <button
             onClick={stop(onToggleFavorite)}
             title="收藏到网站"
+            aria-label={favorited ? `已收藏：${update.title}` : `收藏到网站：${update.title}`}
+            aria-pressed={favorited}
+            className="touch-icon-btn"
             style={{
               width: 36,
               height: 34,
@@ -150,15 +153,39 @@ export function RecentUpdateCard({
               justifyContent: "center",
               border: `1px solid ${favorited ? "var(--accent)" : "var(--border)"}`,
               background: favorited ? "var(--accent-soft)" : "var(--surface)",
-              color: favorited ? "var(--accent)" : "var(--text2)",
+              color: favorited ? "var(--accent-strong)" : "var(--text2)",
             }}
           >
-            <Heart size={16} fill={favorited ? "var(--accent)" : "none"} />
+            <Heart size={16} fill={favorited ? "var(--accent-strong)" : "none"} />
+          </button>
+
+          {/* カード全体のクリックでも開けるが、キーボード操作でも到達できるよう独立したボタンを置く */}
+          <button
+            onClick={stop(onOpenOriginal)}
+            title="在原站点打开"
+            aria-label={`在原站点打开：${update.title}`}
+            className="touch-icon-btn"
+            style={{
+              width: 36,
+              height: 34,
+              borderRadius: 9,
+              flexShrink: 0,
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              border: "1px solid var(--border)",
+              background: "var(--surface)",
+              color: "var(--text2)",
+            }}
+          >
+            <ExternalLink size={15} />
           </button>
 
           <button
             onClick={stop(onDownload)}
             disabled={downloading || downloaded || downloadDisabled}
+            className="touch-btn"
+            aria-label={`下载：${update.title}`}
             title={downloadDisabled && !downloading && !downloaded ? "更新进行中，暂不可下载" : undefined}
             style={{
               flex: 1,
